@@ -1,0 +1,197 @@
+.registration-page {
+  min-height: calc(100vh - 3px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.registration-card {
+  margin-top: -3rem;
+  position: relative;
+  width: min(38vw, 36rem);
+  height: min(85vh, 44rem);
+  display: flex;
+  justify-content: center;
+
+  background: linear-gradient(
+    45deg,
+    var(--blue-3) 0%,
+    var(--blue-2) 35%,
+    var(--blue-1) 100%
+  );
+  border: 4px groove var(--gold-2);
+  box-shadow: 0 1rem 3rem var(--tone-0);
+
+  animation: cardReveal var(--transition-0);
+  transition:
+    border-color var(--transition-0),
+    box-shadow var(--transition-0);
+}
+
+.registration-card::before {
+  content: "";
+  width: 100.1%;
+  height: 100.2%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 8px double var(--gold-3);
+}
+
+.registration-card-body {
+  padding: 1rem 0rem;
+}
+
+.registration-title {
+  color: var(--gold-6);
+  font-size: 2.25rem;
+  font-weight: 333;
+  letter-spacing: 0.33rem;
+  text-transform: uppercase;
+  text-align: center;
+  text-shadow:
+    0 0 3px var(--gold-3),
+    0 1px 2px var(--gold-3),
+    0 0 12px var(--blue-5);
+}
+.registration-title::before,
+.registration-title::after {
+  content: "";
+  display: block;
+  margin: 0.5rem 0rem;
+  width: 3vw;
+  height: 1px;
+  margin-left: auto;
+  margin-right: auto;
+  background: var(--gold-4);
+  opacity: 0.8;
+}
+
+/* this also doesn't work but should.. */
+/* .registration::hover > .registration-title {
+  color: var(--gold-8);
+} */
+
+.registration-subtitle {
+  color: var(--gold-7);
+  text-align: center;
+  margin-top: -1rem;
+  font-size: 1rem;
+  letter-spacing: 0.1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 2rem);
+  transform: translate(-50%, -50%);
+  min-width: 100%;
+  padding: 0rem 1rem;
+}
+
+.form-field {
+  display: flex;
+  flex-flow: column nowrap;
+  gap: 1rem;
+}
+
+.form-field-full {
+  grid-column: 1 / -1;
+}
+
+.form-label {
+  color: var(--tone-8);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+}
+
+.form-field input {
+  height: 2.5rem;
+  outline: none;
+  border: 3px groove var(--gold-2);
+  background-color: var(--blue-1);
+  box-shadow:
+    inset 0 2px 5px var(--tone-0),
+    inset 0 1px 0 var(--tone-7);
+}
+
+.terms-field .form-label {
+  color: var(--tone-7);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.terms-field {
+  display: flex;
+  width: 50%;
+  gap: 0.5rem;
+}
+
+.registration-footer {
+  height: min(9.5vh, 5rem);
+  width: calc(100% - 2rem);
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translate(-50%, 0);
+  text-align: center;
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 1rem;
+  color: var(--gold-5);
+  justify-content: center;
+  align-items: center;
+}
+
+.registration-footer > span {
+  margin: 0 -2rem 0 2rem;
+}
+
+.registration-footer a {
+  color: var(--gold-7);
+  letter-spacing: 0.08rem;
+  text-decoration-line: none;
+}
+
+.registration-footer a:hover {
+  color: var(--gold-8);
+  text-shadow: 0 0 10px var(--gold-glow);
+  text-decoration-line: underline;
+}
+
+#register-btn {
+  border: 3px double var(--gold-3);
+  background: linear-gradient(145deg, var(--gold-6) 0%, var(--gold-3) 100%);
+  width: 50.75%;
+  height: 2.5rem;
+  cursor: pointer;
+}
+
+#register-btn:hover {
+  border: 3px double var(--gold-3);
+  background: linear-gradient(145deg, var(--gold-8) 0%, var(--gold-4) 100%);
+  width: 50.75%;
+  height: 2.5rem;
+}
+
+label {
+  margin-bottom: -0.75rem;
+}
+
+.already-registered {
+  position: absolute;
+  bottom: 2rem;
+}
+
+.already-registered a {
+  color: var(--gold-5);
+  text-decoration: none;
+}

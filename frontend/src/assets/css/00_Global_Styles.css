@@ -1,1 +1,98 @@
-/* Styles that will effect the entire website should be stored here */
+/* Root variables - mostly to establish a color palette so we can add themes later */
+:root {
+  --tone-0: #070707;
+  --tone-1: #151216;
+  --tone-2: #201921;
+  --tone-3: #2f2530;
+  --tone-4: #3f3241;
+  --tone-5: #5c486f;
+  --tone-6: #725a76;
+  --tone-7: #876e8c;
+  --tone-8: #b0a0b0;
+  --tone-9: #fafafa;
+
+  --gold-0: #0c0303;
+  --gold-1: #201609;
+  --gold-2: #35290d;
+  --gold-3: #4d3c14;
+  --gold-4: #65511a;
+  --gold-5: #967c27;
+  --gold-6: #b7902f;
+  --gold-7: #d0ad44;
+  --gold-8: #dccf7f;
+  --gold-9: #fcf8f8;
+
+  --blue-0: #050609;
+  --blue-1: #0f111b;
+  --blue-2: #16192c;
+  --blue-3: #1f233e;
+  --blue-4: #292f52;
+  --blue-5: #3e467c;
+  --blue-6: #4b5594;
+  --blue-7: #656fb0;
+  --blue-8: #9198c5;
+  --blue-9: #f7f8fa;
+
+  --transition-0: 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-1: 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-2: 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* page reset, do not touch unless necessary */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+*::before,
+*::after {
+  pointer-events: none;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: var(--tone-9);
+}
+
+img,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* PAGE CUSTOMIZATION -------------------------- */
+body {
+  background: radial-gradient(
+    circle at 50% 35%,
+    var(--blue-3) 0%,
+    var(--blue-2) 35%,
+    var(--tone-1) 75%,
+    var(--tone-0) 100%
+  );
+  line-height: 1.5;
+}
+
+/* ANIMATIONS: */
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
