@@ -212,12 +212,11 @@ function Registration() {
                 disabled={status.loading}
               />
             </div>
+            <div className="already-registered">
+              <a href="/login">Already have an account?</a>
+            </div>
           </form>
         </div>
-      </div>
-
-      <div className="already-registered">
-        <a href="/login">Already have an account?</a>
       </div>
     </main>
   );

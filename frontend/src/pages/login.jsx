@@ -50,12 +50,14 @@ function Login() {
             </div>
             <div className="login-footer">
               <input type="submit" name="login" id="login-btn" value="Start" />
+                            <div className="already-logged-in">
+        <a href="/">Don't have an account?</a>
+      </div>
             </div>
           </form>
+          
         </div>
-      </div>
-      <div className="already-logged-in">
-        <a href="/">Don't have an account?</a>
+
       </div>
     </main>
   );
