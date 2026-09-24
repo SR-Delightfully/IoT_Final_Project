@@ -49,7 +49,7 @@ function Login() {
 
             </div>
             <div className="login-footer">
-              <input type="submit" name="login" id="login-btn" value="Sign Up" />
+              <input type="submit" name="login" id="login-btn" value="Start" />
             </div>
           </form>
         </div>
