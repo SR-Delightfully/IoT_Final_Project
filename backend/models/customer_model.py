@@ -5,16 +5,9 @@ import datetime
 
 # customer_model.py -> models -> backend -> IoT_Final_Project
 BASE_DIR = Path(__file__).resolve().parents[2]
-DB_FILE = BASE_DIR / "Database" / "Iot_Database.sql"
+DB_FILE = BASE_DIR / "Database" / "iot.db"
 
-class Customer:
-    id: int
-    first_name: str
-    last_name: str
-    address: str
-    phone: Optional[str]
-    email: str
-    created_at: datetime
+
 
 def get_connection():
     conn = sqlite3.connect(DB_FILE)
@@ -22,5 +15,15 @@ def get_connection():
     return conn
 
 def init_db():
-    with get_connection as conn:
-        conn()
+    DB_FILE.parent.mkdir(exist_ok=True)
+    schema = (BASE_DIR / "Database" / "readable.sql").read_text(encoding="utf-8")
+    with get_connection() as conn:
+        conn.executescript(schema)
+
+def add_customer(first_name, last_name, address, phone, email):
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO customers (first_name, last_name, address, phone, email) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (first_name, last_name, address, phone, email),
+        )
