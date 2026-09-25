@@ -198,3 +198,17 @@ label {
   color: var(--gold-5);
   text-decoration: none;
 }
+
+.registration-error {
+  position: absolute;
+  bottom: -8rem;
+  min-width: 18rem;
+  height: 2.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--gold-5);
+  color: var(--blue-0);
+  border: 2px groove var(--gold-4);
+  border-radius: 3rem;
+}

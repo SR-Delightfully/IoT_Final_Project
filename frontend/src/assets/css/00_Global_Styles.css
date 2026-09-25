@@ -76,7 +76,7 @@ svg {
 body {
   background: radial-gradient(
     circle at 50% 35%,
-    var(--blue-2) 0%,
+    var(--blue-3) 0%,
     var(--blue-2) 35%,
     var(--tone-1) 75%,
     var(--tone-0) 100%
@@ -88,8 +88,8 @@ body::before {
   height: 100vh;
   width: 100vw;
   border: 2px solid hotpink;
-  background-image: url("https://i.pinimg.com/736x/94/04/24/940424692016a738986a140af72e0f64.jpg");
-  background-size: 30%;
+  background-image: url("https://i.pinimg.com/736x/b0/80/0e/b0800eb37fa3fa1e4750d6a05f771cf3.jpg");
+  background-size: 20%;
   image-rendering: pixelated;
   background-repeat: repeat;
   position: absolute;
