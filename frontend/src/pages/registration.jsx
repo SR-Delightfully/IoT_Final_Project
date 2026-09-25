@@ -120,7 +120,6 @@ function Registration() {
                   required
                 />
               </div>
-
               <div className="form-field">
                 <label htmlFor="lname-input" className="form-label">
                   Last Name
@@ -135,7 +134,6 @@ function Registration() {
                   required
                 />
               </div>
-
               <div className="form-field form-field-full">
                 <label htmlFor="email-input" className="form-label">
                   Email
@@ -150,7 +148,6 @@ function Registration() {
                   required
                 />
               </div>
-
               <div className="form-field form-field-full">
                 <label htmlFor="phone-input" className="form-label">
                   Phone
@@ -165,7 +162,6 @@ function Registration() {
                   required
                 />
               </div>
-
               <div className="form-field form-field-full">
                 <label htmlFor="addr-input" className="form-label">
                   Address
@@ -176,6 +172,34 @@ function Registration() {
                   name="address"
                   id="addr-input"
                   value={formData.address}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="password-input" className="form-label">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  id="password-input"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="form-field">
+                
+                <label htmlFor="confirm-password-input" className="form-label">
+                  
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  name="confirm_password"
+                  id="confirm-password-input"
+                  value={formData.confirm_password}
                   onChange={handleChange}
                   required
                 />
