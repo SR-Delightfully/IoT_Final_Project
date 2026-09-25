@@ -1,4 +1,6 @@
 import sqlite3
+import hashlib
+import os
 from typing import Optional
 from pathlib import Path
 import datetime
@@ -20,10 +22,15 @@ def init_db():
     with get_connection() as conn:
         conn.executescript(schema)
 
-def add_customer(first_name, last_name, address, phone, email):
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    hashed = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+    return salt.hex() + ":" + hashed.hex()
+
+def add_customer(first_name, last_name, address, phone, email, password):
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO customers (first_name, last_name, address, phone, email) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (first_name, last_name, address, phone, email),
+            "INSERT INTO customers (first_name, last_name, address, phone, email, password_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (first_name, last_name, address, phone, email, hash_password(password)),
         )

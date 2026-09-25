@@ -5,5 +5,6 @@ CREATE TABLE IF NOT EXISTS customers (
     address TEXT NOT NULL,
     phone TEXT,
     email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

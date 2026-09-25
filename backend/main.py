@@ -61,6 +61,8 @@ class Server(BaseHTTPRequestHandler):
             "address",
             "phone",
             "email",
+            "password",
+            "confirm_password"
         ]
 
         for field in required_fields:
@@ -78,6 +80,22 @@ class Server(BaseHTTPRequestHandler):
 
                 return
 
+            if data["password"] != data["confirm_password"]:
+                login(False)
+
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                self.wfile.write(
+                    json.dumps({
+                        "[ERROR]": "Passwords do not match"
+                    }).encode()
+                )
+
+                return
+
         try:
             add_customer(
                 data["first_name"],
@@ -85,6 +103,7 @@ class Server(BaseHTTPRequestHandler):
                 data["address"],
                 data["phone"],
                 data["email"],
+                data["password"]
             )
 
             login(True)

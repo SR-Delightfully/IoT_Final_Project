@@ -2,8 +2,8 @@ import RPi.GPIO as GPIO
 from time import sleep
 
 def login(attempt=False):
-    ledpin = 26 # PWM pin connected to LED
-    buzzpin = 21 # PWM pin connected to buzzer
+    ledpin = 26 # PWM pin connected to BLUE LED
+    buzzpin = 21 # PWM pin connected to buzzer AND RED LED
     GPIO.setwarnings(False) #disable warnings
     GPIO.setmode(GPIO.BCM) #set pin numbering system
     GPIO.setup(ledpin,GPIO.OUT)

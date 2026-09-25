@@ -7,6 +7,8 @@ function Registration() {
     address: "",
     phone: "",
     email: "",
+    password: "",
+    confirm_password: "",
     tos: false,
   });
 
@@ -62,6 +64,8 @@ function Registration() {
           address: formData.address,
           phone: formData.phone,
           email: formData.email,
+          password: formData.password,
+          confirm_password: formData.confirm_password,
         }),
       });
 
@@ -83,6 +87,8 @@ function Registration() {
         address: "",
         phone: "",
         email: "",
+        password: "",
+        confirm_password: "",
         tos: false,
       });
     } catch (error) {

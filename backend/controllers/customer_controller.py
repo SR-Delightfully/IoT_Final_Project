@@ -7,6 +7,10 @@ from breadboardCode import login    # LED / buzzer (Raspberry Pi only)
 
 
 def register(data):   
+    if data["password"] != data["confirm_password"]:
+        login(False)                                   
+        return 400, {"error": "Passwords do not match"}
+    
     try:
         add_customer(
             data["first_name"],
@@ -14,6 +18,7 @@ def register(data):
             data["address"],
             data["phone"],
             data["email"],
+            data["password"]
         )
     except Exception as e:
         print(e)
