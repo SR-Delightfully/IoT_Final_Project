@@ -112,3 +112,20 @@ body::before {
     transform: translateY(0);
   }
 }
+
+::-moz-placeholder {
+  color: var(--gold-4);
+  opacity: 1;
+}
+
+::-webkit-input-placeholder {
+  color: var(--gold-4);
+}
+
+label {
+  line-height: 0.25;
+}
+label > h5 {
+  color: var(--blue-7);
+  font-style: italic;
+}

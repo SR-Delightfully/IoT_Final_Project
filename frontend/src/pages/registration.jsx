@@ -77,7 +77,9 @@ function Registration() {
 
       setStatus({
         loading: false,
-        success: data.message || "Your account has been created successfully.",
+        success:
+          data.message ||
+          "Your account has been created successfully.",
         error: "",
       });
 
@@ -95,7 +97,9 @@ function Registration() {
       setStatus({
         loading: false,
         success: "",
-        error: error.message || "Something went wrong. Please try again.",
+        error:
+          error.message ||
+          "Something went wrong. Please try again.",
       });
     }
   };
@@ -104,17 +108,40 @@ function Registration() {
     <main className="registration-page">
       <div className="registration-card">
         <div className="registration-card-body">
-          <h1 className="registration-title">Register an account</h1>
+          <h1 className="registration-title">
+            Register an Account
+          </h1>
 
           <p className="registration-subtitle">
-            <i>join today to better equip for your journey.</i>
+            <i>
+              Join today to better equip yourself for your journey.
+            </i>
           </p>
 
-          <form id="customer-registration" onSubmit={handleSubmit}>
+          {status.error && (
+            <p className="registration-error">
+              {status.error}
+            </p>
+          )}
+
+          {status.success && (
+            <p className="registration-success">
+              {status.success}
+            </p>
+          )}
+
+          <form
+            id="customer-registration"
+            onSubmit={handleSubmit}
+          >
             <div className="form-grid">
               <div className="form-field">
-                <label htmlFor="fname-input" className="form-label">
-                  First Name
+                <label
+                  htmlFor="fname-input"
+                  className="form-label"
+                >
+                  <h2>First Name</h2>
+                  <h5>What is your given name?</h5>
                 </label>
 
                 <input
@@ -123,12 +150,18 @@ function Registration() {
                   id="fname-input"
                   value={formData.first_name}
                   onChange={handleChange}
+                  placeholder="Ex. John, Jane, Jordan"
                   required
                 />
               </div>
+
               <div className="form-field">
-                <label htmlFor="lname-input" className="form-label">
-                  Last Name
+                <label
+                  htmlFor="lname-input"
+                  className="form-label"
+                >
+                  <h2>Last Name</h2>
+                  <h5>What is your family name?</h5>
                 </label>
 
                 <input
@@ -137,12 +170,18 @@ function Registration() {
                   id="lname-input"
                   value={formData.last_name}
                   onChange={handleChange}
+                  placeholder="Ex. Doe, Dixon, Davis"
                   required
                 />
               </div>
+
               <div className="form-field form-field-full">
-                <label htmlFor="email-input" className="form-label">
-                  Email
+                <label
+                  htmlFor="email-input"
+                  className="form-label"
+                >
+                  <h2>Email</h2>
+                  <h5>What is your personal email address?</h5>
                 </label>
 
                 <input
@@ -151,12 +190,18 @@ function Registration() {
                   id="email-input"
                   value={formData.email}
                   onChange={handleChange}
+                  placeholder="example@google.ca"
                   required
                 />
               </div>
+
               <div className="form-field form-field-full">
-                <label htmlFor="phone-input" className="form-label">
-                  Phone
+                <label
+                  htmlFor="phone-input"
+                  className="form-label"
+                >
+                  <h2>Phone</h2>
+                  <h5>Please enter your personal phone number.</h5>
                 </label>
 
                 <input
@@ -165,12 +210,18 @@ function Registration() {
                   id="phone-input"
                   value={formData.phone}
                   onChange={handleChange}
+                  placeholder="XXX-XXX-XXXX"
                   required
                 />
               </div>
+
               <div className="form-field form-field-full">
-                <label htmlFor="addr-input" className="form-label">
-                  Address
+                <label
+                  htmlFor="addr-input"
+                  className="form-label"
+                >
+                  <h2>Address</h2>
+                  <h5>What is your home address?</h5>
                 </label>
 
                 <input
@@ -179,34 +230,47 @@ function Registration() {
                   id="addr-input"
                   value={formData.address}
                   onChange={handleChange}
+                  placeholder="Enter your home address"
                   required
                 />
               </div>
+
               <div className="form-field">
-                <label htmlFor="password-input" className="form-label">
-                  Password
+                <label
+                  htmlFor="password-input"
+                  className="form-label"
+                >
+                  <h2>Password</h2>
+                  <h5>At least 8 characters.</h5>
                 </label>
+
                 <input
                   type="password"
                   name="password"
                   id="password-input"
                   value={formData.password}
                   onChange={handleChange}
+                  placeholder="Enter password"
                   required
                 />
               </div>
+
               <div className="form-field">
-                
-                <label htmlFor="confirm-password-input" className="form-label">
-                  
-                  Confirm Password
+                <label
+                  htmlFor="confirm-password-input"
+                  className="form-label"
+                >
+                  <h2>Confirm Password</h2>
+                  <h5>Enter it again to confirm.</h5>
                 </label>
+
                 <input
                   type="password"
                   name="confirm_password"
                   id="confirm-password-input"
                   value={formData.confirm_password}
                   onChange={handleChange}
+                  placeholder="Confirm password"
                   required
                 />
               </div>
@@ -223,27 +287,28 @@ function Registration() {
                   required
                 />
 
-                <p className="form-label">I agree to the Terms of Service</p>
+                <p>
+                  I agree to the Terms of Service
+                </p>
               </span>
-
-              {status.error && (
-                <p className="registration-error">{status.error}</p>
-              )}
-
-              {status.success && (
-                <p className="registration-success">{status.success}</p>
-              )}
 
               <input
                 type="submit"
                 name="register"
                 id="register-btn"
-                value={status.loading ? "Creating Account..." : "Sign Up"}
+                value={
+                  status.loading
+                    ? "Creating Account..."
+                    : "Sign Up"
+                }
                 disabled={status.loading}
               />
             </div>
+
             <div className="already-registered">
-              <a href="/login">Already have an account?</a>
+              <a href="/login">
+                Already have an account?
+              </a>
             </div>
           </form>
         </div>
