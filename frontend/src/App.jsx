@@ -5,11 +5,13 @@ import { BrowserRouter as Router, Routes, Route } from "react-router";
 import "./assets/css/00_Global_Styles.css";
 import "./assets/css/01_Registration_Styles.css";
 import "./assets/css/02_Home_Styles.css";
+import "./assets/css/03_Fridge_Styles.css";
 
 // PAGE IMPORTS:
 import Registration from "./pages/registration";
 import Login from "./pages/login";
 import Home from "./pages/home";
+import Fridge from "./pages/fridge";
 
 function App() {
 
@@ -20,6 +22,8 @@ function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Registration />} />
+      <Route path="/home" element={<Home />} />
+      <Route path="/fridge" element={<Fridge />} />
     </Routes>
    </Router>
   );
