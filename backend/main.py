@@ -2,8 +2,9 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import sqlite3
+import mqttProj
 
-from models.customer_model import init_db, add_customer
+from models.customer_model import init_db, add_customer, DB_FILE
 from breadboardCode import login
 
 
@@ -119,6 +120,7 @@ class Server(BaseHTTPRequestHandler):
 
 def run_server():
     init_db()
+    mqttProj.start(db_path=DB_FILE)
 
     server_address = ("0.0.0.0", 5050)
     server = HTTPServer(server_address, Server)
@@ -131,7 +133,7 @@ def run_server():
         print("\nServer stopped")
     finally:
         server.server_close()
-
+        mqttProj.stop()
 
 if __name__ == "__main__":
     run_server()
