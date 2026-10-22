@@ -1,0 +1,11 @@
+Hello,
+Your server "Fridge 1" is warmer than the set threshold.
+The current temperature is 10℃.
+
+Would you like to turn on the fan?
+If so, then please reply to this message with "YES";
+Otherwise, please ignore this message.
+
+
+Best,
+The IoT Team
