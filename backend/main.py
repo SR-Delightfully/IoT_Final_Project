@@ -4,6 +4,9 @@ import json
 import sqlite3
 
 from models.customer_model import init_db, add_customer
+from models.fridge_model import get_all_fridges #Retreive fridges from db
+# Import function to retrieve the latest fridge reading
+from models.fridge_reading_model import get_latest_reading
 from breadboardCode import login
 
 
@@ -34,7 +37,34 @@ class Server(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+    
+    def do_GET(self):
+        # Get all refrigerators
+        if self.path == "/fridges":
+            fridges = get_all_fridges()
+            self.send_json(200, [dict(fridge) for fridge in fridges])
+            return
 
+        # Get the latest reading for a specific refrigerator
+        parts = self.path.strip("/").split("/")
+
+        if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "latest":
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid refrigerator ID"})
+                return
+
+            fridge_id = int(parts[1])
+            reading = get_latest_reading(fridge_id)
+
+            if reading:
+                self.send_json(200, dict(reading))
+            else:
+                self.send_json(404, {"error": "No readings found"})
+
+            return
+
+        self.send_json(404, {"error": "Route not found"})
+    
     def do_POST(self):
         if self.path == "/register":
             self.register_customer()
