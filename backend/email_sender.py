@@ -2,7 +2,7 @@ import smtplib
 from email.message import EmailMessage
 from email_credentials import our_email as sender_email, app_password
 
-def send_email(user_email, server_name, temp):
+def send_email(user_email, server_name, temp, alert_id=None):
     
     # --- setup ---
     receiver_email = user_email
@@ -30,7 +30,11 @@ The IoT Team"""
 
     # From == the sender's email address
     # To == the recipient's email address
-    msg['Subject'] = f'Overheating Server Warning'
+    msg['Subject'] = (
+    f'Overheating Fridge Alert #{alert_id}'
+    if alert_id is not None
+    else 'Overheating Server Warning'
+    )
     msg['From'] = sender_email
     msg['To'] = receiver_email
 

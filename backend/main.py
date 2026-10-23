@@ -4,10 +4,12 @@ import json
 import sqlite3
 
 from models.customer_model import init_db, add_customer
-from models.fridge_model import get_all_fridges #Retreive fridges from db
+from models.fridge_model import get_all_fridges, update_fridge #Retreive and update fridges from db
 # Import function to retrieve the latest fridge reading
 from models.fridge_reading_model import get_latest_reading
 from breadboardCode import login
+#retrieve alerts for the dashboard
+from models.alert_model import get_all_alerts
 
 
 def hardware_feedback(attempt):
@@ -34,7 +36,7 @@ class Server(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
     
@@ -43,6 +45,10 @@ class Server(BaseHTTPRequestHandler):
         if self.path == "/fridges":
             fridges = get_all_fridges()
             self.send_json(200, [dict(fridge) for fridge in fridges])
+            return
+        if self.path == "/alerts":
+            alerts = get_all_alerts()
+            self.send_json(200, [dict(alert) for alert in alerts])
             return
 
         # Get the latest reading for a specific refrigerator
@@ -65,6 +71,45 @@ class Server(BaseHTTPRequestHandler):
 
         self.send_json(404, {"error": "Route not found"})
     
+
+        # Update the maximum temperature for a refrigerator
+    def do_PUT(self):
+        parts = self.path.strip("/").split("/")
+
+        if len(parts) != 3 or parts[0] != "fridges" or parts[2] != "threshold":
+            self.send_json(404, {"error": "Route not found"})
+            return
+
+        if not parts[1].isdigit():
+            self.send_json(400, {"error": "Invalid fridge ID"})
+            return
+
+        fridge_id = int(parts[1])
+
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(length))
+        except ValueError:
+            self.send_json(400, {"error": "Invalid JSON"})
+            return
+
+        if not isinstance(data, dict) or type(data.get("max_temperature")) not in (int, float):
+            self.send_json(400, {"error": "Invalid temperature"})
+            return
+
+        try:
+            updated = update_fridge(
+                fridge_id,
+                fridge_max_temperature=data["max_temperature"]
+            )
+        except sqlite3.IntegrityError:
+            self.send_json(400, {"error": "Temperature violates fridge limits"})
+            return
+
+        if updated:
+            self.send_json(200, {"message": "Threshold updated"})
+        else:
+            self.send_json(404, {"error": "Fridge not found"})
     def do_POST(self):
         if self.path == "/register":
             self.register_customer()

@@ -2,6 +2,9 @@ from imapclient import IMAPClient
 import email
 from email.header import decode_header
 from email_credentials import our_email, app_password
+import re
+from fan_control import validate_email_reply
+from fan_control import handle_email_response
 
 def process_message(server, uid):
     raw = server.fetch([uid], ['RFC822'])[uid][b'RFC822']
@@ -17,6 +20,12 @@ def process_message(server, uid):
         subject_parts.append(part)
 
     subject = ''.join(subject_parts)
+    # Get the alert ID from the email subject
+    match = re.search(r"Overheating Fridge Alert #(\d+)", subject)
+
+    alert_id = int(match.group(1)) if match else None
+
+    print("Alert ID:", alert_id)
     from_ = msg.get('From')
 
     body = ""
@@ -43,11 +52,17 @@ def process_message(server, uid):
     print("First line detected:", repr(first_line))
 
     # Check if the first line is YES, Yes, or yes
-    if first_line.casefold() == "yes":
+    approved = first_line.casefold() == "yes"
+    if approved:
         print("YES received! Fan activation approved.")
+    else: 
+        print("No valid Yes reply detected.")
         # THIS IS WHERE THE CODE WILL RETURN SOMETHING FOR THE BACKEND TO USE
-    else:
-        print("No valid YES reply detected.")
+    return{
+        "alert_id": alert_id,
+        "approved": approved,
+        "sender": from_
+    }
 
 
 def main():
@@ -75,7 +90,13 @@ def main():
                 current_uids = set(server.search('ALL'))
                 new_uids = current_uids - seen_uids
                 for uid in sorted(new_uids):
-                    return process_message(server, uid)
+                    response = process_message(server, uid)
+
+                    if validate_email_reply(response):
+                        print("TEST ONLY: Motor ON requested")
+                    else:
+                        print("Fan activiation denied")
+
                 seen_uids = current_uids
                 
 if __name__ == '__main__':
