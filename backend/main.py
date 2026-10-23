@@ -2,10 +2,10 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import sqlite3
+import mqttProj
 
-from models.customer_model import init_db, add_customer
-from models.fridge_model import get_all_fridges, update_fridge #Retreive and update fridges from db
-# Import function to retrieve the latest fridge reading
+from models.customer_model import init_db, add_customer, DB_FILE
+from models.fridge_model import get_all_fridges, update_fridge
 from models.fridge_reading_model import get_latest_reading
 from breadboardCode import login
 #retrieve alerts for the dashboard
@@ -194,6 +194,7 @@ class Server(BaseHTTPRequestHandler):
 
 def run_server():
     init_db()
+    mqttProj.start(db_path=DB_FILE)
 
     server_address = ("0.0.0.0", 5050)
     server = HTTPServer(server_address, Server)
@@ -206,7 +207,7 @@ def run_server():
         print("\nServer stopped")
     finally:
         server.server_close()
-
+        mqttProj.stop()
 
 if __name__ == "__main__":
     run_server()
