@@ -32,8 +32,7 @@ function FridgeCard({ fridge }) {
 
         <section className="fridge-monitoring">
           <div className="fridge-section-heading">
-            <span>01</span>
-            <h3>LIVE MONITORING</h3>
+            <h3>// LIVE MONITORING</h3>
           </div>
 
           <div className="gauge-container">
