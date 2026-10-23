@@ -15,12 +15,8 @@ import re
 import time
 
 # ---------------- Config ----------------
-# The database the server creates. The server passes its own path in with
-# mqttProj.start(db_path=...); this default is only used when you run this file by itself.
-DB_PATH = "fridge_monitor.db"
- 
-me = 'coveyducklucaswork@gmail.com'             # Gmail address that sends alerts and receives replies
-app_password = 'tvouosbivhyeczec'   # Gmail app password (works for SMTP and IMAP)
+me = 'example@gmail.com'             # Gmail address that sends alerts and receives replies
+app_password = ''   # Gmail app password (works for SMTP and IMAP)
  
 BROKER = "10.108.22.132"
 # Motor driver pins (BCM numbers) - same wiring as the motor lab
@@ -54,7 +50,7 @@ FRIDGES = [
 # If an address also exists in Users.user_email, the alert is logged in
 # Notifications for that user and their reply fills alert_acknowledged_by.
 ALERT_EMAILS = [
-    'lukecage7799@gmail.com',
+    'example@gmail.com',
 ]
  
 # ESP32s publish to fridge/<fridge_id>/temperature and fridge/<fridge_id>/humidity
