@@ -88,13 +88,13 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_status
 ON Notifications(user_id, notification_status);
 
 
-INSERT INTO Fridges (
-    fridge_name,
-    fridge_location,
-    fridge_max_humidity,
-    fridge_min_humidity,
-    fridge_max_temperature,
-    fridge_min_temperature
-) VALUES
-    ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
-    ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
+-- INSERT INTO Fridges (
+--     fridge_name,
+--     fridge_location,
+--     fridge_max_humidity,
+--     fridge_min_humidity,
+--     fridge_max_temperature,
+--     fridge_min_temperature
+-- ) VALUES
+--     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
+--     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
