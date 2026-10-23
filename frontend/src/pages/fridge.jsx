@@ -129,7 +129,7 @@ function Fridge() {
         }
 
         const data = await response.json();
-        setFridges(Array.isArray(data.fridges) ? data.fridges : []);
+        setFridges(Array.isArray(data) ? data : []);
       } catch (err) {
         if (err.name !== "AbortError") {
           setError("Could not load fridge data. Check the backend connection.");
@@ -162,7 +162,7 @@ function Fridge() {
     <>
       <main className="fridge-page">
         <header className="fridge-page-header">
-            <span className="page-eyebrow">FROSTBYTE / CONTROL CENTER</span>
+            <span className="page-eyebrow">SMART TCG STORE / CONTROL ROOM</span>
             <h1>Fridge systems</h1>
             <p>Monitor internal conditions and manage cooling hardware.</p>
           </header>
