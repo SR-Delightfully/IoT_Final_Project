@@ -37,7 +37,7 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -52,7 +52,7 @@ class Server(BaseHTTPRequestHandler):
     
     def do_GET(self):
         # Get all fridge dashboard data
-        if self.path == "/fridges":
+        if self.path == "/fridges/dashboard":
             dashboard = []
 
             for fridge in get_all_fridges():
@@ -65,9 +65,50 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, dashboard)
             return
         # Get all refrigerators
-        if self.path == "/fridges":
-            fridges = get_all_fridges()
-            self.send_json(200, [dict(fridge) for fridge in fridges])
+        if self.path.rstrip("/") == "/fridges":
+            try:
+                with get_connection() as conn:
+                    cursor = conn.execute("""
+                        SELECT
+                            f.fridge_id,
+                            f.fridge_name,
+                            f.fridge_location,
+                            f.fridge_min_temperature,
+                            f.fridge_max_temperature,
+                            f.fridge_min_humidity,
+                            f.fridge_max_humidity,
+                            r.reading_temperature,
+                            r.reading_humidity,
+                            r.reading_recorded_at
+                        FROM Fridges AS f
+                        LEFT JOIN FridgeReadings AS r
+                            ON r.reading_id = (
+                                SELECT r2.reading_id
+                                FROM FridgeReadings AS r2
+                                WHERE r2.fridge_id = f.fridge_id
+                                ORDER BY
+                                    r2.reading_recorded_at DESC,
+                                    r2.reading_id DESC
+                                LIMIT 1
+                            )
+                        ORDER BY f.fridge_id
+                    """)
+
+                    columns = [column[0] for column in cursor.description]
+                    fridges = [
+                        dict(zip(columns, row))
+                        for row in cursor.fetchall()
+                    ]
+
+                self.send_json(200, fridges)
+
+            except Exception as error:
+                print(f"Fridge fetch error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not load fridge data"}
+                )
+
             return
         if self.path == "/alerts":
             alerts = get_all_alerts()
@@ -104,9 +145,8 @@ class Server(BaseHTTPRequestHandler):
             return
 
         self.send_json(404, {"error": "Route not found"})
-    
 
-        # Update the maximum temperature for a refrigerator
+    # Update the maximum temperature for a refrigerator
     def do_PUT(self):
         parts = self.path.strip("/").split("/")
 
@@ -127,14 +167,14 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(400, {"error": "Invalid JSON"})
             return
 
-        if not isinstance(data, dict) or type(data.get("max_temperature")) not in (int, float):
+        if not isinstance(data, dict) or type(data.get("min_temperature")) not in (int, float):
             self.send_json(400, {"error": "Invalid temperature"})
             return
 
         try:
             updated = update_fridge(
                 fridge_id,
-                fridge_max_temperature=data["max_temperature"]
+                fridge_min_temperature=data["min_temperature"]
             )
         except sqlite3.IntegrityError:
             self.send_json(400, {"error": "Temperature violates fridge limits"})
@@ -144,55 +184,6 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, {"message": "Threshold updated"})
         else:
             self.send_json(404, {"error": "Fridge not found"})
-    def do_GET(self):
-        if self.path.rstrip("/") == "/fridges":
-            try:
-                with get_connection() as conn:
-                    cursor = conn.execute("""
-                        SELECT
-                            f.fridge_id,
-                            f.fridge_name,
-                            f.fridge_location,
-                            f.fridge_min_temperature,
-                            f.fridge_max_temperature,
-                            f.fridge_min_humidity,
-                            f.fridge_max_humidity,
-                            r.reading_temperature,
-                            r.reading_humidity,
-                            r.reading_recorded_at
-                        FROM Fridges AS f
-                        LEFT JOIN FridgeReadings AS r
-                            ON r.reading_id = (
-                                SELECT r2.reading_id
-                                FROM FridgeReadings AS r2
-                                WHERE r2.fridge_id = f.fridge_id
-                                ORDER BY
-                                    r2.reading_recorded_at DESC,
-                                    r2.reading_id DESC
-                                LIMIT 1
-                            )
-                        ORDER BY f.fridge_id
-                    """)
-
-                    columns = [column[0] for column in cursor.description]
-                    fridges = [
-                        dict(zip(columns, row))
-                        for row in cursor.fetchall()
-                    ]
-
-                self.send_json(200, {"fridges": fridges})
-
-            except Exception as error:
-                print(f"Fridge fetch error: {error}")
-                self.send_json(
-                    500,
-                    {"error": "Could not load fridge data"}
-                )
-
-            return
-
-        self.send_json(404, {"error": "Route not found"})
-
     def do_POST(self):
         if self.path == "/register":
             self.register_customer()

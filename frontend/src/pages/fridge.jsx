@@ -55,7 +55,26 @@ function FridgeCard({ fridge }) {
         <form
           id={`customer-fridge-${fridge.fridge_id}`}
           className="customer-fridge-form"
-          onSubmit={(event) => event.preventDefault()}
+          onSubmit={async (event) => {
+  event.preventDefault();
+
+  const minTemp = Number(event.currentTarget.elements.fridge_min_temperature.value);
+
+  try {
+    const response = await fetch(`http://localhost:5050/fridges/${fridge.fridge_id}/threshold`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ min_temperature: minTemp })
+    });
+
+    if (!response.ok) throw new Error("Save failed");
+
+    alert("Minimum temperature saved!");
+    window.location.reload();
+  } catch (error) {
+    alert("Could not save temperature");
+  }
+}}
         >
           <div className="fridge-section-heading">
             <span>02</span>
