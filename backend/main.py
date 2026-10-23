@@ -1,15 +1,19 @@
-
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import sqlite3
-import mqttProj
-
 from models.customer_model import init_db, add_customer, DB_FILE
 from models.fridge_model import get_all_fridges, update_fridge
 from models.fridge_reading_model import get_latest_reading
 from breadboardCode import login
 #retrieve alerts for the dashboard
 from models.alert_model import get_all_alerts
+from models.notification_model import get_user_notifications
+import sys
+
+if sys.platform == "win32":
+    mqttProj = None
+else:
+    import mqttProj
 
 
 def hardware_feedback(attempt):
@@ -41,6 +45,19 @@ class Server(BaseHTTPRequestHandler):
         self.end_headers()
     
     def do_GET(self):
+        # Get all fridge dashboard data
+        if self.path == "/fridges/dashboard":
+            dashboard = []
+
+            for fridge in get_all_fridges():
+                data = dict(fridge)
+                reading = get_latest_reading(data["fridge_id"])
+
+                data["latest_reading"] = dict(reading) if reading else None
+                dashboard.append(data)
+
+            self.send_json(200, dashboard)
+            return
         # Get all refrigerators
         if self.path == "/fridges":
             fridges = get_all_fridges()
@@ -67,6 +84,17 @@ class Server(BaseHTTPRequestHandler):
             else:
                 self.send_json(404, {"error": "No readings found"})
 
+            return
+        # Get notifications for a user
+        if len(parts) == 3 and parts[0] == "users" and parts[2] == "notifications":
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid user ID"})
+                return
+
+            user_id = int(parts[1])
+            notifications = get_user_notifications(user_id)
+
+            self.send_json(200, [dict(n) for n in notifications])
             return
 
         self.send_json(404, {"error": "Route not found"})
@@ -192,9 +220,12 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(500, {"error": "Could not add customer"})
 
 
+
 def run_server():
     init_db()
-    mqttProj.start(db_path=DB_FILE)
+
+    if mqttProj is not None:
+        mqttProj.start(db_path=DB_FILE)
 
     server_address = ("0.0.0.0", 5050)
     server = HTTPServer(server_address, Server)
@@ -207,7 +238,10 @@ def run_server():
         print("\nServer stopped")
     finally:
         server.server_close()
-        mqttProj.stop()
+
+        if mqttProj is not None:
+            mqttProj.stop()
+
 
 if __name__ == "__main__":
     run_server()
