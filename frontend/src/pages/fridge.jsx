@@ -1,13 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TempGauge from "../components/TempGuage";
 import HumidityBar from "../components/HumidityBar";
 import Fan from "../components/Fan";
 
-function FridgeCard({ fridge }) {
-  const [fanStatus, setFanStatus] = useState("OFF");
+const API = "http://localhost:5050";
+const REFRESH_MS = 2000; // how often to pull new readings
 
-  function toggleFan() {
-    setFanStatus((current) => (current === "ON" ? "OFF" : "ON"));
+function FridgeCard({ fridge }) {
+  // Fan state follows the database (fridge_fan_on) when the backend sends it,
+  // so a YES email reply also shows up here.
+  const serverFan =
+    fridge.fridge_fan_on === undefined ? null : fridge.fridge_fan_on ? "ON" : "OFF";
+  const [fanStatus, setFanStatus] = useState(serverFan ?? "OFF");
+  const [fanBusy, setFanBusy] = useState(false);
+
+  useEffect(() => {
+    if (serverFan !== null && !fanBusy) setFanStatus(serverFan);
+  }, [serverFan, fanBusy]);
+
+  async function toggleFan() {
+    const next = fanStatus === "ON" ? "OFF" : "ON";
+    setFanStatus(next); // update the UI right away
+    setFanBusy(true);
+    try {
+      const response = await fetch(`${API}/fridges/${fridge.fridge_id}/fan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on: next === "ON" }),
+      });
+      if (!response.ok) throw new Error("Fan toggle failed");
+    } catch (error) {
+      setFanStatus(next === "ON" ? "OFF" : "ON"); // undo if the server refused
+      alert("Could not change the fan");
+    } finally {
+      setFanBusy(false);
+    }
   }
 
   return (
@@ -23,9 +50,7 @@ function FridgeCard({ fridge }) {
         </div>
 
         <section className="fridge-ceiling">
-          <span className="ceiling-label">
-            INTERNAL COOLING UNIT
-          </span>
+          <span className="ceiling-label">INTERNAL COOLING UNIT</span>
 
           <Fan status={fanStatus} onToggle={toggleFan} />
         </section>
@@ -56,25 +81,30 @@ function FridgeCard({ fridge }) {
           id={`customer-fridge-${fridge.fridge_id}`}
           className="customer-fridge-form"
           onSubmit={async (event) => {
-  event.preventDefault();
+            event.preventDefault();
 
-  const minTemp = Number(event.currentTarget.elements.fridge_min_temperature.value);
+            const minTemp = Number(
+              event.currentTarget.elements.fridge_min_temperature.value
+            );
 
-  try {
-    const response = await fetch(`http://localhost:5050/fridges/${fridge.fridge_id}/threshold`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ min_temperature: minTemp })
-    });
+            try {
+              const response = await fetch(
+                `${API}/fridges/${fridge.fridge_id}/threshold`,
+                {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ min_temperature: minTemp }),
+                }
+              );
 
-    if (!response.ok) throw new Error("Save failed");
+              if (!response.ok) throw new Error("Save failed");
 
-    alert("Minimum temperature saved!");
-    window.location.reload();
-  } catch (error) {
-    alert("Could not save temperature");
-  }
-}}
+              // No reload needed - the next refresh picks up the new value.
+              alert("Minimum temperature saved!");
+            } catch (error) {
+              alert("Could not save temperature");
+            }
+          }}
         >
           <div className="fridge-section-heading">
             <span>02</span>
@@ -112,17 +142,13 @@ function FridgeCard({ fridge }) {
           <span className="footer-label">HARDWARE STATUS</span>
 
           <span
-            className={`footer-fan-state ${
-              fanStatus === "ON" ? "active" : ""
-            }`}
+            className={`footer-fan-state ${fanStatus === "ON" ? "active" : ""}`}
           >
             <span className="fan-status-dot" />
             FAN {fanStatus}
           </span>
 
-          <span className="footer-unit">
-            FB-{fridge.fridge_id}
-          </span>
+          <span className="footer-unit">FB-{fridge.fridge_id}</span>
         </footer>
       </div>
     </article>
@@ -133,14 +159,19 @@ function Fridge() {
   const [fridges, setFridges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const inFlight = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function fetchFridges() {
+      if (inFlight.current) return; // skip if the last request hasn't finished
+      inFlight.current = true;
       try {
-        const response = await fetch("http://localhost:5050/fridges", {
+        const response = await fetch(`${API}/fridges`, {
           signal: controller.signal,
+          cache: "no-store",
         });
 
         if (!response.ok) {
@@ -149,11 +180,14 @@ function Fridge() {
 
         const data = await response.json();
         setFridges(Array.isArray(data) ? data : []);
+        setError("");
+        setLastUpdated(new Date());
       } catch (err) {
         if (err.name !== "AbortError") {
           setError("Could not load fridge data. Check the backend connection.");
         }
       } finally {
+        inFlight.current = false;
         if (!controller.signal.aborted) {
           setLoading(false);
         }
@@ -161,15 +195,21 @@ function Fridge() {
     }
 
     fetchFridges();
+    const timer = setInterval(fetchFridges, REFRESH_MS);
 
-    return () => controller.abort();
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
   }, []);
 
   if (loading) {
     return <p>Loading fridge data...</p>;
   }
 
-  if (error) {
+  // Only replace the page with an error if we never got data.
+  // If a refresh fails later, keep showing the last readings.
+  if (error && fridges.length === 0) {
     return <p>{error}</p>;
   }
 
@@ -178,20 +218,23 @@ function Fridge() {
   }
 
   return (
-    <>
-      <main className="fridge-page">
-        <header className="fridge-page-header">
-            <span className="page-eyebrow">SMART TCG STORE / CONTROL ROOM</span>
-            <h1>Fridge systems</h1>
-            <p>Monitor internal conditions and manage cooling hardware.</p>
-          </header>
-          <article className="fridge-grid">
-            {fridges.map((fridge) => (
-              <FridgeCard key={fridge.fridge_id} fridge={fridge} />
-            ))}
-          </article>
-      </main>
-    </>
+    <main className="fridge-page">
+      <header className="fridge-page-header">
+        <span className="page-eyebrow">SMART TCG STORE / CONTROL ROOM</span>
+        <h1>Fridge systems</h1>
+        <p>Monitor internal conditions and manage cooling hardware.</p>
+        <p className="fridge-last-updated">
+          {error
+            ? "Connection lost - showing last readings"
+            : lastUpdated && `Last updated ${lastUpdated.toLocaleTimeString()}`}
+        </p>
+      </header>
+      <article className="fridge-grid">
+        {fridges.map((fridge) => (
+          <FridgeCard key={fridge.fridge_id} fridge={fridge} />
+        ))}
+      </article>
+    </main>
   );
 }
 
