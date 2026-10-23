@@ -1,9 +1,15 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from models.customer_model import init_db, add_customer
 import json
 import sqlite3
 from models.customer_model import init_db, add_customer, DB_FILE
 from models.fridge_model import get_all_fridges, update_fridge
 from models.fridge_reading_model import get_latest_reading
+from contextlib import closing
+
+def get_connection():
+    return sqlite3.connect("../Database/iot.db")
+
 from breadboardCode import login
 #retrieve alerts for the dashboard
 from models.alert_model import get_all_alerts
@@ -31,7 +37,7 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -46,7 +52,7 @@ class Server(BaseHTTPRequestHandler):
     
     def do_GET(self):
         # Get all fridge dashboard data
-        if self.path == "/fridges/dashboard":
+        if self.path == "/fridges":
             dashboard = []
 
             for fridge in get_all_fridges():
@@ -138,6 +144,55 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, {"message": "Threshold updated"})
         else:
             self.send_json(404, {"error": "Fridge not found"})
+    def do_GET(self):
+        if self.path.rstrip("/") == "/fridges":
+            try:
+                with get_connection() as conn:
+                    cursor = conn.execute("""
+                        SELECT
+                            f.fridge_id,
+                            f.fridge_name,
+                            f.fridge_location,
+                            f.fridge_min_temperature,
+                            f.fridge_max_temperature,
+                            f.fridge_min_humidity,
+                            f.fridge_max_humidity,
+                            r.reading_temperature,
+                            r.reading_humidity,
+                            r.reading_recorded_at
+                        FROM Fridges AS f
+                        LEFT JOIN FridgeReadings AS r
+                            ON r.reading_id = (
+                                SELECT r2.reading_id
+                                FROM FridgeReadings AS r2
+                                WHERE r2.fridge_id = f.fridge_id
+                                ORDER BY
+                                    r2.reading_recorded_at DESC,
+                                    r2.reading_id DESC
+                                LIMIT 1
+                            )
+                        ORDER BY f.fridge_id
+                    """)
+
+                    columns = [column[0] for column in cursor.description]
+                    fridges = [
+                        dict(zip(columns, row))
+                        for row in cursor.fetchall()
+                    ]
+
+                self.send_json(200, {"fridges": fridges})
+
+            except Exception as error:
+                print(f"Fridge fetch error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not load fridge data"}
+                )
+
+            return
+
+        self.send_json(404, {"error": "Route not found"})
+
     def do_POST(self):
         if self.path == "/register":
             self.register_customer()
@@ -161,7 +216,10 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if not isinstance(data, dict):
-            self.send_json(400, {"error": "Request body must be a JSON object"})
+            self.send_json(
+                400,
+                {"error": "Request body must be a JSON object"}
+            )
             return
 
         required_fields = [
@@ -178,7 +236,10 @@ class Server(BaseHTTPRequestHandler):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
-                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
                 return
 
         if data["password"] != data["confirm_password"]:

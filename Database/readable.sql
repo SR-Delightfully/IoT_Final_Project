@@ -25,10 +25,10 @@ CREATE TABLE IF NOT EXISTS Fridges (
     fridge_id INTEGER PRIMARY KEY AUTOINCREMENT,
     fridge_name VARCHAR(100) NOT NULL,
     fridge_location VARCHAR(255),
-    fridge_max_humidity REAL NOT NULL,
-    fridge_min_humidity REAL NOT NULL,
-    fridge_max_temperature REAL NOT NULL,
-    fridge_min_temperature REAL NOT NULL,
+    fridge_max_humidity INTEGER NOT NULL,
+    fridge_min_humidity INTEGER NOT NULL,
+    fridge_max_temperature INTEGER NOT NULL,
+    fridge_min_temperature INTEGER NOT NULL,
     fridge_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (fridge_min_humidity <= fridge_max_humidity),
     CHECK (fridge_min_temperature <= fridge_max_temperature)
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS Fridges (
 CREATE TABLE IF NOT EXISTS FridgeReadings (
     reading_id INTEGER PRIMARY KEY AUTOINCREMENT,
     fridge_id INTEGER NOT NULL,
-    reading_humidity REAL NOT NULL,
-    reading_temperature REAL NOT NULL,
+    reading_humidity INTEGER NOT NULL,
+    reading_temperature INTEGER NOT NULL,
     reading_recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (fridge_id)
         REFERENCES Fridges(fridge_id)
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS Alerts (
     reading_id INTEGER NOT NULL,
     alert_type VARCHAR(30) NOT NULL,
     alert_condition VARCHAR(20) NOT NULL,
-    alert_value REAL NOT NULL,
+    alert_value INTEGER NOT NULL,
     alert_message TEXT NOT NULL,
     alert_status VARCHAR(20) NOT NULL DEFAULT 'unacknowledged',
     alert_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -86,3 +86,15 @@ CREATE TABLE IF NOT EXISTS Notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_status
 ON Notifications(user_id, notification_status);
+
+
+-- INSERT INTO Fridges (
+--     fridge_name,
+--     fridge_location,
+--     fridge_max_humidity,
+--     fridge_min_humidity,
+--     fridge_max_temperature,
+--     fridge_min_temperature
+-- ) VALUES
+--     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
+--     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
