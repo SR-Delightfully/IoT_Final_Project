@@ -98,3 +98,185 @@ ON Notifications(user_id, notification_status);
 -- ) VALUES
 --     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
+
+ALTER TABLE Customers
+ADD COLUMN loyalty_points INTEGER NOT NULL DEFAULT 0
+CHECK (loyalty_points >= 0);
+
+
+CREATE TABLE IF NOT EXISTS Products (
+    product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_name TEXT NOT NULL,
+    product_active INTEGER NOT NULL DEFAULT 1 CHECK (product_active IN (0, 1)),
+    product_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS StockReceptions (
+    reception_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    quantity_received INTEGER NOT NULL CHECK (quantity_received > 0),
+    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reception_note TEXT,
+
+    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+);
+
+CREATE TABLE IF NOT EXISTS Purchases (
+    purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER,
+    purchase_total INTEGER NOT NULL DEFAULT 0 CHECK (purchase_total >= 0),
+    points_earned INTEGER NOT NULL DEFAULT 0 CHECK (points_earned >= 0),
+    payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid')),
+    purchase_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    receipt_emailed_at TEXT,
+
+    FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
+);
+
+CREATE TABLE IF NOT EXISTS PurchaseItems (
+    purchase_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+
+    FOREIGN KEY (purchase_id) REFERENCES Purchases(purchase_id),
+    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+);
+
+CREATE TABLE IF NOT EXISTS ProductTags (
+    tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    epc TEXT NOT NULL UNIQUE CHECK (length(epc) BETWEEN 1 AND 24),
+    purchase_item_id INTEGER,
+
+    FOREIGN KEY (product_id) REFERENCES Products(product_id),
+    FOREIGN KEY (purchase_item_id) REFERENCES PurchaseItems(purchase_item_id)
+);
+
+
+CREATE VIEW IF NOT EXISTS Inventory AS
+SELECT
+    p.product_id,
+    p.product_name,
+    p.product_category,
+    p.product_upc,
+    p.product_price,
+    p.producer_company,
+    p.product_active,
+    COALESCE(received.total_received, 0) AS total_received,
+    COALESCE(sold.total_sold, 0) AS total_sold,
+    COALESCE(received.total_received, 0) - COALESCE(sold.total_sold, 0) AS quantity_in_stock,
+    COALESCE(tags.available_epc_tags, 0) AS available_epc_tags
+FROM Products AS p
+LEFT JOIN (
+    SELECT
+        sr.product_id,
+        SUM(sr.quantity_received) AS total_received
+    FROM StockReceptions AS sr
+    GROUP BY sr.product_id
+) AS received
+    ON received.product_id = p.product_id
+LEFT JOIN (
+    SELECT
+        pi.product_id,
+        SUM(pi.quantity) AS total_sold
+    FROM PurchaseItems AS pi
+    JOIN Purchases AS pu
+        ON pu.purchase_id = pi.purchase_id
+    WHERE pu.payment_status = 'paid'
+    GROUP BY pi.product_id
+) AS sold
+    ON sold.product_id = p.product_id
+LEFT JOIN (
+    SELECT
+        pt.product_id,
+        COUNT(*) AS available_epc_tags
+    FROM ProductTags AS pt
+    WHERE pt.purchase_item_id IS NULL
+    GROUP BY pt.product_id
+) AS tags
+    ON tags.product_id = p.product_id;
+
+
+CREATE VIEW IF NOT EXISTS PurchaseReceipts AS
+SELECT
+    pu.purchase_id,
+    'R-' || printf('%06d', pu.purchase_id) AS receipt_number,
+    pu.customer_id,
+    c.customer_code AS membership_number,
+    u.user_fname AS customer_first_name,
+    u.user_lname AS customer_last_name,
+    u.user_email AS customer_email,
+    pu.purchase_created_at,
+    pu.payment_status,
+    pu.purchase_total,
+    pu.points_earned,
+    pu.receipt_emailed_at
+FROM Purchases AS pu
+LEFT JOIN Customers AS c
+    ON c.customer_id = pu.customer_id
+LEFT JOIN Users AS u
+    ON u.user_id = c.customer_id;
+
+
+CREATE INDEX IF NOT EXISTS idx_stock_receptions_product
+ON StockReceptions(product_id);
+
+CREATE INDEX IF NOT EXISTS idx_purchases_customer_date
+ON Purchases(customer_id, purchase_created_at);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
+ON PurchaseItems(purchase_id);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_items_product
+ON PurchaseItems(product_id);
+
+CREATE INDEX IF NOT EXISTS idx_product_tags_product_sale
+ON ProductTags(product_id, purchase_item_id);
+
+
+INSERT OR IGNORE INTO Users (
+    user_role, user_fname, user_lname, user_email, user_password_hash
+)
+VALUES ('customer', 'Alex', 'Martin', 'alex.martin@example.com', '12934ednde23230');
+
+INSERT OR IGNORE INTO Customers (
+    customer_id, customer_code, customer_address, customer_phone, loyalty_points
+)
+SELECT user_id, 'MEM00000001', '123 Acadie Street', 1234321230, 0
+FROM Users
+WHERE user_email = 'alex.martin@example.com';
+
+
+INSERT OR IGNORE INTO Products (
+    product_id, product_name, product_category, product_price, product_upc, producer_company
+)
+VALUES
+    (1, 'Coca-Cola 500ml', 'Beverages', 250, '0123456789012', 'Coca-Cola Company'),
+    (2, 'Potato Chips 50g', 'Snacks', 175, '0987654321098', 'Snacks Co.');
+
+
+INSERT INTO StockReceptions (
+    product_id, quantity_received, reception_note
+)
+VALUES
+    (1, 7, 'Initial Coca-Cola stock'),
+    (2, 3, 'Initial chips stock');
+
+
+INSERT INTO ProductTags (
+    product_id, epc
+)
+VALUES
+    (1, 'COKE-001'),
+    (1, 'COKE-002'),
+    (1, 'COKE-003'),
+    (1, 'COKE-004'),
+    (1, 'COKE-005'),
+    (1, 'COKE-006'),
+    (1, 'COKE-007'),
+    (2, 'CHIPS-001'),
+    (2, 'CHIPS-002'),
+    (2, 'CHIPS-003');
