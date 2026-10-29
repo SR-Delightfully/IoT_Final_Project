@@ -107,6 +107,11 @@ CHECK (loyalty_points >= 0);
 CREATE TABLE IF NOT EXISTS Products (
     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_name TEXT NOT NULL,
+    product_category TEXT NOT NULL,
+    product_price INTEGER NOT NULL CHECK (product_price >= 0),
+    product_upc TEXT NOT NULL UNIQUE CHECK (length(product_upc) BETWEEN 1 AND 13),
+    producer_company TEXT NOT NULL,
+    product_image_url TEXT,
     product_active INTEGER NOT NULL DEFAULT 1 CHECK (product_active IN (0, 1)),
     product_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
