@@ -100,8 +100,8 @@ ON Notifications(user_id, notification_status);
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
 
 ALTER TABLE Customers
-ADD COLUMN loyalty_points INTEGER NOT NULL DEFAULT 0
-CHECK (loyalty_points >= 0);
+ADD COLUMN customer_loyalty_points INTEGER NOT NULL DEFAULT 0
+CHECK (customer_loyalty_points >= 0);
 
 
 CREATE TABLE IF NOT EXISTS Products (
@@ -109,8 +109,8 @@ CREATE TABLE IF NOT EXISTS Products (
     product_name TEXT NOT NULL,
     product_category TEXT NOT NULL,
     product_price INTEGER NOT NULL CHECK (product_price >= 0),
-    product_upc TEXT NOT NULL UNIQUE CHECK (length(product_upc) BETWEEN 1 AND 13),
-    producer_company TEXT NOT NULL,
+    product_upc TEXT NOT NULL UNIQUE CHECK (length(product_upc) BETWEEN 12 AND 13),
+    product_producer_company TEXT NOT NULL,
     product_image_url TEXT,
     product_active INTEGER NOT NULL DEFAULT 1 CHECK (product_active IN (0, 1)),
     product_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -119,8 +119,8 @@ CREATE TABLE IF NOT EXISTS Products (
 CREATE TABLE IF NOT EXISTS StockReceptions (
     reception_id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
-    quantity_received INTEGER NOT NULL CHECK (quantity_received > 0),
-    received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reception_quantity_received INTEGER NOT NULL CHECK (reception_quantity_received > 0),
+    reception_received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     reception_note TEXT,
 
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
@@ -130,10 +130,10 @@ CREATE TABLE IF NOT EXISTS Purchases (
     purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER,
     purchase_total INTEGER NOT NULL DEFAULT 0 CHECK (purchase_total >= 0),
-    points_earned INTEGER NOT NULL DEFAULT 0 CHECK (points_earned >= 0),
-    payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid')),
+    purchase_points_earned INTEGER NOT NULL DEFAULT 0 CHECK (purchase_points_earned >= 0),
+    purchase_payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (purchase_payment_status IN ('pending', 'paid')),
     purchase_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    receipt_emailed_at TEXT,
+    purchase_receipt_emailed_at TEXT,
 
     FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
 );
@@ -142,18 +142,18 @@ CREATE TABLE IF NOT EXISTS PurchaseItems (
     purchase_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
     purchase_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
-    product_name TEXT NOT NULL,
-    quantity INTEGER NOT NULL CHECK (quantity > 0),
-    unit_price INTEGER NOT NULL CHECK (unit_price >= 0),
+    purchase_item_name TEXT NOT NULL,
+    purchase_item_quantity INTEGER NOT NULL CHECK (purchase_item_quantity > 0),
+    purchase_item_unit_price INTEGER NOT NULL CHECK (purchase_item_unit_price >= 0),
 
     FOREIGN KEY (purchase_id) REFERENCES Purchases(purchase_id),
     FOREIGN KEY (product_id) REFERENCES Products(product_id)
 );
 
 CREATE TABLE IF NOT EXISTS ProductTags (
-    tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
-    epc TEXT NOT NULL UNIQUE CHECK (length(epc) BETWEEN 1 AND 24),
+    product_tag_epc TEXT NOT NULL UNIQUE CHECK (length(product_tag_epc) BETWEEN 1 AND 24),
     purchase_item_id INTEGER,
 
     FOREIGN KEY (product_id) REFERENCES Products(product_id),
@@ -168,7 +168,7 @@ SELECT
     p.product_category,
     p.product_upc,
     p.product_price,
-    p.producer_company,
+    p.product_producer_company,
     p.product_active,
     COALESCE(received.total_received, 0) AS total_received,
     COALESCE(sold.total_sold, 0) AS total_sold,
@@ -178,7 +178,7 @@ FROM Products AS p
 LEFT JOIN (
     SELECT
         sr.product_id,
-        SUM(sr.quantity_received) AS total_received
+        SUM(sr.reception_quantity_received) AS total_received
     FROM StockReceptions AS sr
     GROUP BY sr.product_id
 ) AS received
@@ -186,11 +186,11 @@ LEFT JOIN (
 LEFT JOIN (
     SELECT
         pi.product_id,
-        SUM(pi.quantity) AS total_sold
+        SUM(pi.purchase_item_quantity) AS total_sold
     FROM PurchaseItems AS pi
     JOIN Purchases AS pu
         ON pu.purchase_id = pi.purchase_id
-    WHERE pu.payment_status = 'paid'
+    WHERE pu.purchase_payment_status = 'paid'
     GROUP BY pi.product_id
 ) AS sold
     ON sold.product_id = p.product_id
@@ -215,10 +215,10 @@ SELECT
     u.user_lname AS customer_last_name,
     u.user_email AS customer_email,
     pu.purchase_created_at,
-    pu.payment_status,
+    pu.purchase_payment_status,
     pu.purchase_total,
-    pu.points_earned,
-    pu.receipt_emailed_at
+    pu.purchase_points_earned,
+    pu.purchase_receipt_emailed_at
 FROM Purchases AS pu
 LEFT JOIN Customers AS c
     ON c.customer_id = pu.customer_id
@@ -248,40 +248,40 @@ INSERT OR IGNORE INTO Users (
 VALUES ('customer', 'Alex', 'Martin', 'alex.martin@example.com', '12934ednde23230');
 
 INSERT OR IGNORE INTO Customers (
-    customer_id, customer_code, customer_address, customer_phone, loyalty_points
+    customer_id, customer_code, customer_address, customer_phone, customer_loyalty_points
 )
-SELECT user_id, 'MEM00000001', '123 Acadie Street', 1234321230, 0
+SELECT user_id, 'MEM' || printf('%08d', user_id), '123 Acadie Street', '1234321230', 0
 FROM Users
 WHERE user_email = 'alex.martin@example.com';
 
 
 INSERT OR IGNORE INTO Products (
-    product_id, product_name, product_category, product_price, product_upc, producer_company
+    product_id, product_name, product_category, product_price, product_upc, product_producer_company
 )
 VALUES
-    (1, 'Coca-Cola 500ml', 'Beverages', 250, '0123456789012', 'Coca-Cola Company'),
-    (2, 'Potato Chips 50g', 'Snacks', 175, '0987654321098', 'Snacks Co.');
+    (1, 'Pikachu', 'Rare Card', 250, '0123456789012', 'Pikachu Inc.'),
+    (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
 
 
 INSERT INTO StockReceptions (
-    product_id, quantity_received, reception_note
+    product_id, reception_quantity_received, reception_note
 )
 VALUES
-    (1, 7, 'Initial Coca-Cola stock'),
-    (2, 3, 'Initial chips stock');
+    (1, 7, 'Initial Pikachu stock'),
+    (2, 3, 'Initial bulbasaur stock');
 
 
 INSERT INTO ProductTags (
-    product_id, epc
+    product_id, product_tag_epc
 )
 VALUES
-    (1, 'COKE-001'),
-    (1, 'COKE-002'),
-    (1, 'COKE-003'),
-    (1, 'COKE-004'),
-    (1, 'COKE-005'),
-    (1, 'COKE-006'),
-    (1, 'COKE-007'),
-    (2, 'CHIPS-001'),
-    (2, 'CHIPS-002'),
-    (2, 'CHIPS-003');
+    (1, 'PIKACHU-001'),
+    (1, 'PIKACHU-002'),
+    (1, 'PIKACHU-003'),
+    (1, 'PIKACHU-004'),
+    (1, 'PIKACHU-005'),
+    (1, 'PIKACHU-006'),
+    (1, 'PIKACHU-007'),
+    (2, 'BULBASAUR-001'),
+    (2, 'BULBASAUR-002'),
+    (2, 'BULBASAUR-003');
