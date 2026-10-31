@@ -100,8 +100,8 @@ ON Notifications(user_id, notification_status);
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
 
 ALTER TABLE Customers
-ADD COLUMN loyalty_points INTEGER NOT NULL DEFAULT 0
-CHECK (loyalty_points >= 0);
+ADD COLUMN customer_loyalty_points INTEGER NOT NULL DEFAULT 0
+CHECK (customer_loyalty_points >= 0);
 
 
 CREATE TABLE IF NOT EXISTS Products (
@@ -248,9 +248,9 @@ INSERT OR IGNORE INTO Users (
 VALUES ('customer', 'Alex', 'Martin', 'alex.martin@example.com', '12934ednde23230');
 
 INSERT OR IGNORE INTO Customers (
-    customer_id, customer_code, customer_address, customer_phone, loyalty_points
+    customer_id, customer_code, customer_address, customer_phone, customer_loyalty_points
 )
-SELECT user_id, 'MEM00000001', '123 Acadie Street', '1234321230', 0
+SELECT user_id, 'MEM' || printf('%08d', user_id), '123 Acadie Street', '1234321230', 0
 FROM Users
 WHERE user_email = 'alex.martin@example.com';
 
@@ -260,7 +260,7 @@ INSERT OR IGNORE INTO Products (
 )
 VALUES
     (1, 'Pikachu', 'Rare Card', 250, '0123456789012', 'Pikachu Inc.'),
-    (2, 'Bulbasaur', 'Normal Card', 300, '0987654321098', 'Bulbasaur Co.');
+    (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
 
 
 INSERT INTO StockReceptions (
