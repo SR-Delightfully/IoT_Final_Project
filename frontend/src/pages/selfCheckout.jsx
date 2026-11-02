@@ -1,21 +1,8 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Header from "../layout/header";
 
-const PRODUCTS = [
-  { id: 1, name: "Booster Pack", category: "Cards", price: 7.99, barcode: "100000000001", stock: 24 },
-  { id: 2, name: "Elite Trainer Box", category: "Cards", price: 54.99, barcode: "100000000002", stock: 8 },
-  { id: 3, name: "Starter Deck", category: "Cards", price: 19.99, barcode: "100000000003", stock: 12 },
-  { id: 4, name: "Deck Box", category: "Accessories", price: 12.99, barcode: "100000000004", stock: 15 },
-  { id: 5, name: "Card Sleeves", category: "Accessories", price: 6.99, barcode: "100000000005", stock: 30 },
-  { id: 6, name: "Playmat", category: "Accessories", price: 24.99, barcode: "100000000006", stock: 6 },
-  { id: 7, name: "Energy Drink", category: "Drinks", price: 3.49, barcode: "100000000007", stock: 20 },
-  { id: 8, name: "Bottled Water", category: "Drinks", price: 1.99, barcode: "100000000008", stock: 25 },
-  { id: 9, name: "Chocolate Bar", category: "Snacks", price: 2.49, barcode: "100000000009", stock: 18 },
-  { id: 10, name: "Chips", category: "Snacks", price: 2.99, barcode: "100000000010", stock: 16 },
-];
-
-const CATEGORIES = ["All", "Cards", "Accessories", "Drinks", "Snacks"];
+const API_URL = "http://localhost:5050";
 const GST_RATE = 0.05;
 const QST_RATE = 0.09975;
 
@@ -31,10 +18,10 @@ function calculateTotals(items) {
     0
   );
   const gst = Math.round(subtotal * GST_RATE * 100) / 100;
-  const qst = Math.round((subtotal + gst) * QST_RATE * 100) / 100;
+  const qst = Math.round(subtotal * QST_RATE * 100) / 100;
 
   return {
-    subtotal,
+    subtotal: Math.round(subtotal * 100) / 100,
     gst,
     qst,
     total: Math.round((subtotal + gst + qst) * 100) / 100,
@@ -42,7 +29,7 @@ function calculateTotals(items) {
 }
 
 function SelfCheckout() {
-  const [products] = useState(PRODUCTS);
+  const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
@@ -51,6 +38,50 @@ function SelfCheckout() {
   const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState("");
   const [barcode, setBarcode] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+
+  async function loadProducts() {
+    try {
+      const response = await fetch(`${API_URL}/products`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not load products.");
+      }
+
+      const productList = Array.isArray(data) ? data : data.products;
+
+      if (!Array.isArray(productList)) {
+        throw new Error("Invalid product data received from server.");
+      }
+
+      setProducts(
+        productList.map((product) => ({
+          id: product.product_id,
+          name: product.product_name,
+          category: product.product_category,
+          price: Number(product.product_price),
+          barcode: product.product_barcode || "",
+          stock: Number(product.product_stock ?? product.stock ?? 0),
+        }))
+      );
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message || "Could not connect to the server.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  const categories = useMemo(
+    () => ["All", ...new Set(products.map((product) => product.category))],
+    [products]
+  );
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -70,13 +101,17 @@ function SelfCheckout() {
   }, [products, search, category]);
 
   const totals = useMemo(() => calculateTotals(cart), [cart]);
-
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   function addToCart(product) {
     setMessage("");
     setReceipt(null);
     setCheckoutOpen(false);
+
+    if (product.stock < 1) {
+      setMessage(`${product.name} is out of stock.`);
+      return;
+    }
 
     setCart((current) => {
       const existing = current.find((item) => item.id === product.id);
@@ -94,17 +129,13 @@ function SelfCheckout() {
         );
       }
 
-      if (product.stock < 1) {
-        setMessage(`${product.name} is out of stock.`);
-        return current;
-      }
-
       return [...current, { ...product, quantity: 1 }];
     });
   }
 
   function updateQuantity(id, change) {
     setMessage("");
+
     setCart((current) =>
       current
         .map((item) => {
@@ -155,23 +186,62 @@ function SelfCheckout() {
     setCheckoutOpen(true);
   }
 
-  function completeDemoCheckout() {
-    if (!cart.length) return;
+  async function completeCheckout() {
+    if (!cart.length || processing) return;
 
-    const completedItems = cart.map((item) => ({ ...item }));
-    const completedTotals = calculateTotals(completedItems);
-
-    setReceipt({
-      number: `DEMO-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleString("en-CA"),
-      items: completedItems,
-      totals: completedTotals,
-      paymentMethod,
-    });
-
-    setCart([]);
-    setCheckoutOpen(false);
+    setProcessing(true);
     setMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          products: cart.map((item) => ({
+            product_id: item.id,
+            quantity: item.quantity,
+          })),
+          payment_method: paymentMethod,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Checkout failed.");
+      }
+
+      const completedTotals = data.totals || {
+        subtotal: Number(data.purchase_subtotal ?? totals.subtotal),
+        gst: Number(data.purchase_gst ?? totals.gst),
+        qst: Number(data.purchase_qst ?? totals.qst),
+        total: Number(data.purchase_total ?? totals.total),
+      };
+
+      setReceipt({
+        number:
+          data.receipt_number ||
+          data.number ||
+          data.purchase_id ||
+          `ORDER-${Date.now()}`,
+        date: data.receipt_created_at
+          ? new Date(data.receipt_created_at).toLocaleString("en-CA")
+          : new Date().toLocaleString("en-CA"),
+        items: cart.map((item) => ({ ...item })),
+        totals: completedTotals,
+        paymentMethod,
+      });
+
+      setCart([]);
+      setCheckoutOpen(false);
+      await loadProducts();
+    } catch (error) {
+      setMessage(error.message || "Could not complete purchase.");
+    } finally {
+      setProcessing(false);
+    }
   }
 
   function startNewSale() {
@@ -182,30 +252,31 @@ function SelfCheckout() {
     setCategory("All");
     setCheckoutOpen(false);
     setMessage("");
+    loadProducts();
   }
 
   if (receipt) {
     return (
       <main className="fridge-page selfCheckout-page">
-        <section className="sc-receipt">
-          <div className="sc-success-icon">✓</div>
-          <span className="sc-eyebrow">TRANSACTION COMPLETE</span>
+        <section className="receipt">
+          <div className="success-icon">✓</div>
+          <span className="eyebrow">TRANSACTION COMPLETE</span>
           <h1>Thank you!</h1>
-          <p className="sc-muted">
-            This is a simulated transaction. No payment was processed.
+          <p className="muted">
+            Your purchase has been recorded successfully.
           </p>
 
-          <div className="sc-receipt-paper">
-            <div className="sc-receipt-header">
+          <div className="receipt-paper">
+            <div className="receipt-header">
               <strong>SMART TCG STORE</strong>
               <span>SELF-CHECKOUT RECEIPT</span>
               <span>{receipt.date}</span>
               <span>Order #{receipt.number}</span>
             </div>
 
-            <div className="sc-receipt-items">
+            <div className="receipt-items">
               {receipt.items.map((item) => (
-                <div className="sc-receipt-item" key={item.id}>
+                <div className="receipt-item" key={item.id}>
                   <div>
                     <strong>{item.name}</strong>
                     <span>
@@ -217,11 +288,20 @@ function SelfCheckout() {
               ))}
             </div>
 
-            <div className="sc-receipt-totals">
-              <div><span>Subtotal</span><span>{money(receipt.totals.subtotal)}</span></div>
-              <div><span>GST (5%)</span><span>{money(receipt.totals.gst)}</span></div>
-              <div><span>QST (9.975%)</span><span>{money(receipt.totals.qst)}</span></div>
-              <div className="sc-receipt-total">
+            <div className="receipt-totals">
+              <div>
+                <span>Subtotal</span>
+                <span>{money(receipt.totals.subtotal)}</span>
+              </div>
+              <div>
+                <span>GST (5%)</span>
+                <span>{money(receipt.totals.gst)}</span>
+              </div>
+              <div>
+                <span>QST (9.975%)</span>
+                <span>{money(receipt.totals.qst)}</span>
+              </div>
+              <div className="receipt-total">
                 <strong>TOTAL</strong>
                 <strong>{money(receipt.totals.total)}</strong>
               </div>
@@ -230,10 +310,9 @@ function SelfCheckout() {
                 <span>{receipt.paymentMethod.toUpperCase()}</span>
               </div>
             </div>
-            <p className="sc-demo-notice">DEMO RECEIPT — NOT A VALID PROOF OF PURCHASE</p>
           </div>
 
-          <button className="sc-primary sc-new-sale" onClick={startNewSale}>
+          <button className="primary new-sale" onClick={startNewSale}>
             Start new sale
           </button>
         </section>
@@ -247,30 +326,34 @@ function SelfCheckout() {
         eyebrow="SMART TCG STORE / REGISTER 01"
         title="Self Checkout"
         subtitle="Scan your items, review your cart then process"
-      ></Header>
+      />
 
-      <div className="sc-workspace">
-        <section className="sc-catalog">
-          <header className="sc-section-heading">
+      <div className="workspace">
+        <section className="catalog">
+          <header className="section-heading">
             <div>
-              <span className="sc-eyebrow">01 / PRODUCT CATALOG</span>
+              <span className="eyebrow">01 / PRODUCT CATALOG</span>
               <h2>Find your items</h2>
             </div>
-            <span className="sc-count">{filteredProducts.length} PRODUCTS</span>
+            <span className="count">
+              {loading ? "LOADING..." : `${filteredProducts.length} PRODUCTS`}
+            </span>
           </header>
 
-          <form className="sc-barcode-form" onSubmit={scanBarcode}>
-            <span className="sc-barcode-icon">▥</span>
+          <form className="barcode-form" onSubmit={scanBarcode}>
+            <span className="barcode-icon">▥</span>
             <input
               value={barcode}
               onChange={(event) => setBarcode(event.target.value)}
               placeholder="Scan barcode or enter product code..."
               aria-label="Barcode"
             />
-            <button type="submit">Add item</button>
+            <button type="submit" disabled={loading}>
+              Add item
+            </button>
           </form>
 
-          <label className="sc-search">
+          <label className="search">
             <span>⌕</span>
             <input
               value={search}
@@ -279,14 +362,18 @@ function SelfCheckout() {
               aria-label="Search products"
             />
             {search && (
-              <button type="button" onClick={() => setSearch("")} aria-label="Clear search">
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Clear search"
+              >
                 ×
               </button>
             )}
           </label>
 
-          <div className="sc-categories" aria-label="Product categories">
-            {CATEGORIES.map((item) => (
+          <div className="categories" aria-label="Product categories">
+            {categories.map((item) => (
               <button
                 key={item}
                 type="button"
@@ -298,59 +385,67 @@ function SelfCheckout() {
             ))}
           </div>
 
-          {message && (
-            <p className="sc-message" role="status">{message}</p>
+          {message && <p className="message" role="status">{message}</p>}
+
+          {loading ? (
+            <div className="empty">
+              <strong>Loading products...</strong>
+            </div>
+          ) : (
+            <div className="product-grid">
+              {filteredProducts.map((product) => {
+                const cartItem = cart.find((item) => item.id === product.id);
+                const quantity = cartItem?.quantity || 0;
+                const unavailable = quantity >= product.stock;
+
+                return (
+                  <article className="product" key={product.id}>
+                    <div className="product-art">
+                      <span>{product.category.toUpperCase()}</span>
+                      <span className="product-symbol">
+                        {product.category === "Cards"
+                          ? "▤"
+                          : product.category === "Accessories"
+                            ? "◇"
+                            : product.category === "Drinks"
+                              ? "▥"
+                              : "◈"}
+                      </span>
+                      {quantity > 0 && (
+                        <span className="in-cart">{quantity} IN CART</span>
+                      )}
+                    </div>
+                    <div className="product-info">
+                      <h3>{product.name}</h3>
+                      <span className="stock">
+                        {Math.max(0, product.stock - quantity)} available
+                      </span>
+                      <div className="product-footer">
+                        <strong>{money(product.price)}</strong>
+                        <button
+                          type="button"
+                          onClick={() => addToCart(product)}
+                          disabled={unavailable}
+                          aria-label={`Add ${product.name} to cart`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
 
-          <div className="sc-product-grid">
-            {filteredProducts.map((product) => {
-              const cartItem = cart.find((item) => item.id === product.id);
-              const quantity = cartItem?.quantity || 0;
-              const unavailable = quantity >= product.stock;
-
-              return (
-                <article className="sc-product" key={product.id}>
-                  <div className="sc-product-art">
-                    <span>{product.category.toUpperCase()}</span>
-                    <span className="sc-product-symbol">
-                      {product.category === "Cards"
-                        ? "▤"
-                        : product.category === "Accessories"
-                          ? "◇"
-                          : product.category === "Drinks"
-                            ? "▥"
-                            : "◈"}
-                    </span>
-                    {quantity > 0 && (
-                      <span className="sc-in-cart">{quantity} IN CART</span>
-                    )}
-                  </div>
-                  <div className="sc-product-info">
-                    <h3>{product.name}</h3>
-                    <span className="sc-stock">
-                      {product.stock - quantity} available
-                    </span>
-                    <div className="sc-product-footer">
-                      <strong>{money(product.price)}</strong>
-                      <button
-                        type="button"
-                        onClick={() => addToCart(product)}
-                        disabled={unavailable}
-                        aria-label={`Add ${product.name} to cart`}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="sc-empty">
+          {!loading && filteredProducts.length === 0 && (
+            <div className="empty">
               <strong>No products found</strong>
-              <p>Try a different search or category.</p>
+              <p>
+                {products.length === 0
+                  ? "No products have been added to the database yet."
+                  : "Try a different search or category."}
+              </p>
               <button
                 type="button"
                 onClick={() => {
@@ -364,26 +459,26 @@ function SelfCheckout() {
           )}
         </section>
 
-        <aside className="sc-cart">
-          <header className="sc-section-heading">
+        <aside className="cart">
+          <header className="section-heading">
             <div>
-              <span className="sc-eyebrow">02 / YOUR PURCHASE</span>
+              <span className="eyebrow">02 / YOUR PURCHASE</span>
               <h2>Shopping cart</h2>
             </div>
-            <span className="sc-count">{itemCount} ITEMS</span>
+            <span className="count">{itemCount} ITEMS</span>
           </header>
 
           {cart.length === 0 ? (
-            <div className="sc-cart-empty">
-              <span className="sc-cart-empty-icon">▤</span>
+            <div className="cart-empty">
+              <span className="cart-empty-icon">▤</span>
               <strong>Your cart is empty</strong>
               <p>Choose a product or scan a barcode to get started.</p>
             </div>
           ) : (
-            <div className="sc-cart-items">
+            <div className="cart-items">
               {cart.map((item) => (
-                <article className="sc-cart-item" key={item.id}>
-                  <div className="sc-cart-item-main">
+                <article className="cart-item" key={item.id}>
+                  <div className="cart-item-main">
                     <div>
                       <h3>{item.name}</h3>
                       <span>{money(item.price)} each</span>
@@ -391,8 +486,8 @@ function SelfCheckout() {
                     <strong>{money(item.price * item.quantity)}</strong>
                   </div>
 
-                  <div className="sc-cart-item-controls">
-                    <div className="sc-quantity">
+                  <div className="cart-item-controls">
+                    <div className="quantity">
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.id, -1)}
@@ -411,7 +506,7 @@ function SelfCheckout() {
                       </button>
                     </div>
                     <button
-                      className="sc-remove"
+                      className="remove"
                       type="button"
                       onClick={() => removeFromCart(item.id)}
                     >
@@ -425,7 +520,7 @@ function SelfCheckout() {
 
           {cart.length > 0 && (
             <button
-              className="sc-clear-cart"
+              className="clear-cart"
               type="button"
               onClick={() => {
                 setCart([]);
@@ -437,29 +532,38 @@ function SelfCheckout() {
             </button>
           )}
 
-          <div className="sc-total-breakdown">
-            <div><span>Subtotal</span><span>{money(totals.subtotal)}</span></div>
-            <div><span>GST (5%)</span><span>{money(totals.gst)}</span></div>
-            <div><span>QST (9.975%)</span><span>{money(totals.qst)}</span></div>
-            <div className="sc-grand-total">
+          <div className="total-breakdown">
+            <div>
+              <span>Subtotal</span>
+              <span>{money(totals.subtotal)}</span>
+            </div>
+            <div>
+              <span>GST (5%)</span>
+              <span>{money(totals.gst)}</span>
+            </div>
+            <div>
+              <span>QST (9.975%)</span>
+              <span>{money(totals.qst)}</span>
+            </div>
+            <div className="grand-total">
               <span>Total</span>
               <strong>{money(totals.total)}</strong>
             </div>
-            <p>Taxes are estimates for this demo checkout.</p>
+            <p>Taxes are calculated from your cart subtotal.</p>
           </div>
 
           {!checkoutOpen ? (
             <button
-              className="sc-primary"
+              className="primary"
               type="button"
               onClick={beginCheckout}
-              disabled={!cart.length}
+              disabled={!cart.length || loading}
             >
               Proceed to payment <span>→</span>
             </button>
           ) : (
-            <div className="sc-payment">
-              <span className="sc-eyebrow">03 / PAYMENT METHOD</span>
+            <div className="payment">
+              <span className="eyebrow">03 / PAYMENT METHOD</span>
               <h3>How would you like to pay?</h3>
 
               {[
@@ -468,12 +572,12 @@ function SelfCheckout() {
                 { id: "mobile", title: "Mobile payment", detail: "External payment terminal" },
               ].map((method) => (
                 <button
-                  className={`sc-payment-option ${paymentMethod === method.id ? "is-selected" : ""}`}
+                  className={`payment-option ${paymentMethod === method.id ? "is-selected" : ""}`}
                   type="button"
                   key={method.id}
                   onClick={() => setPaymentMethod(method.id)}
                 >
-                  <span className="sc-payment-radio">
+                  <span className="payment-radio">
                     {paymentMethod === method.id ? "●" : "○"}
                   </span>
                   <span>
@@ -483,27 +587,29 @@ function SelfCheckout() {
                 </button>
               ))}
 
-              <p className="sc-demo-notice">
-                DEMO MODE — this will not charge you or record a real payment.
+              <p className="demo-notice">
+                PAYMENT IS NOT PROCESSED BY THIS APPLICATION.
               </p>
 
               <button
-                className="sc-primary"
+                className="primary"
                 type="button"
-                onClick={completeDemoCheckout}
+                onClick={completeCheckout}
+                disabled={processing}
               >
-                Simulate checkout · {money(totals.total)}
+                {processing ? "Processing..." : `Complete purchase · ${money(totals.total)}`}
               </button>
               <button
-                className="sc-secondary"
+                className="secondary"
                 type="button"
                 onClick={() => setCheckoutOpen(false)}
+                disabled={processing}
               >
                 Back to cart
               </button>
             </div>
           )}
-          <div className="sc-cart-footer">SMART TCG STORE · REGISTER 01</div>
+          <div className="cart-footer">SMART TCG STORE · REGISTER 01</div>
         </aside>
       </div>
     </main>

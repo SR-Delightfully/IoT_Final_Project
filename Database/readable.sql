@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS Users (
     user_fname VARCHAR(100) NOT NULL,
     user_lname VARCHAR(100) NOT NULL,
     user_email VARCHAR(255) NOT NULL UNIQUE,
-    user_password_hash VARCHAR(255) NOT NULL,
+    user_password_hash VARCHAR(255) NOT NULL,   
     user_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -98,3 +98,56 @@ ON Notifications(user_id, notification_status);
 -- ) VALUES
 --     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
+
+
+CREATE TABLE IF NOT EXISTS Products (
+    product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_name VARCHAR(150) NOT NULL,
+    product_category VARCHAR(100) NOT NULL,
+    product_price REAL NOT NULL CHECK (product_price >= 0),
+    product_barcode VARCHAR(50) UNIQUE,
+    product_active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS Purchases (
+    purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER,
+    purchase_subtotal REAL NOT NULL,
+    purchase_gst REAL NOT NULL,
+    purchase_qst REAL NOT NULL,
+    purchase_total REAL NOT NULL,
+    purchase_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
+);
+
+CREATE TABLE IF NOT EXISTS PurchaseItems (
+    purchase_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    purchase_item_price REAL NOT NULL,
+    FOREIGN KEY (purchase_id) REFERENCES Purchases(purchase_id),
+    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+);
+
+CREATE TABLE IF NOT EXISTS ProductTags (
+    product_tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    product_tag_epc VARCHAR(100) NOT NULL UNIQUE,
+    purchase_item_id INTEGER,
+    FOREIGN KEY (product_id) REFERENCES Products(product_id),
+    FOREIGN KEY (purchase_item_id) REFERENCES PurchaseItems(purchase_item_id)
+);
+
+CREATE TABLE IF NOT EXISTS PurchaseReceipts (
+    receipt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id INTEGER NOT NULL UNIQUE,
+    receipt_number VARCHAR(50) NOT NULL UNIQUE,
+    receipt_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (purchase_id) REFERENCES Purchases(purchase_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_tags_product
+ON ProductTags(product_id);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
+ON PurchaseItems(purchase_id);
