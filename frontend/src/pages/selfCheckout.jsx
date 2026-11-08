@@ -3,42 +3,33 @@ import { useEffect, useMemo, useState } from "react";
 import Header from "../layout/header";
 
 const API_URL = "http://localhost:5050";
-const GST_RATE = 0.05;
-const QST_RATE = 0.09975;
 
 const money = (amount) =>
   new Intl.NumberFormat("en-CA", {
     style: "currency",
     currency: "CAD",
-  }).format(amount);
-
-function calculateTotals(items) {
-  const subtotal = items.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0
-  );
-  const gst = Math.round(subtotal * GST_RATE * 100) / 100;
-  const qst = Math.round(subtotal * QST_RATE * 100) / 100;
-
-  return {
-    subtotal: Math.round(subtotal * 100) / 100,
-    gst,
-    qst,
-    total: Math.round((subtotal + gst + qst) * 100) / 100,
-  };
-}
+  }).format(Number(amount) || 0);
 
 function SelfCheckout() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
+  const [totals, setTotals] = useState({
+    subtotal: 0,
+    gst: 0,
+    qst: 0,
+    total: 0,
+  });
+
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionStatus, setSessionStatus] = useState("LOADING");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState("");
-  const [barcode, setBarcode] = useState("");
   const [loading, setLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
   async function loadProducts() {
@@ -60,13 +51,13 @@ function SelfCheckout() {
         productList.map((product) => ({
           id: product.product_id,
           name: product.product_name,
-          category: product.product_category,
+          category: product.product_category || "Uncategorized",
           price: Number(product.product_price),
           barcode: product.product_barcode || "",
-          stock: Number(product.product_stock ?? product.stock ?? 0),
+          stock: Number(product.product_stock ?? 0),
+          image: product.product_image_url || "",
         }))
       );
-      setMessage("");
     } catch (error) {
       setMessage(error.message || "Could not connect to the server.");
     } finally {
@@ -74,9 +65,105 @@ function SelfCheckout() {
     }
   }
 
+  async function createCheckoutSession() {
+    setSessionLoading(true);
+    setSessionStatus("LOADING");
+
+    try {
+      const response = await fetch(`${API_URL}/checkout/session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not start checkout session.");
+      }
+
+      setSessionId(data.session_id);
+      setSessionStatus(data.session_status || "ACTIVE");
+      setMessage("");
+    } catch (error) {
+      setSessionId(null);
+      setSessionStatus("ERROR");
+      setMessage(error.message || "Could not start checkout session.");
+    } finally {
+      setSessionLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadProducts();
+    createCheckoutSession();
   }, []);
+
+  useEffect(() => {
+    if (!sessionId || sessionStatus !== "ACTIVE") return;
+
+    let active = true;
+    let requestInProgress = false;
+
+    async function loadCart() {
+      if (requestInProgress) return;
+
+      requestInProgress = true;
+
+      try {
+        const response = await fetch(
+          `${API_URL}/checkout/session/${sessionId}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Could not load checkout cart.");
+        }
+
+        if (!active) return;
+
+        setCart(
+          data.items.map((item) => ({
+            id: item.product_id,
+            name: item.product_name,
+            category: item.product_category || "Uncategorized",
+            price: Number(item.product_price),
+            quantity: Number(item.quantity),
+            stock: Number(item.product_stock ?? 0),
+            barcode: item.product_barcode || "",
+            image: item.product_image_url || "",
+          }))
+        );
+
+        setTotals({
+          subtotal: Number(data.subtotal) || 0,
+          gst: Number(data.gst) || 0,
+          qst: Number(data.qst) || 0,
+          total: Number(data.total) || 0,
+        });
+
+        setSessionStatus(data.session.session_status);
+      } catch (error) {
+        if (active) {
+          setMessage(error.message || "Could not update checkout cart.");
+        }
+      } finally {
+        requestInProgress = false;
+      }
+    }
+
+    loadCart();
+
+    const interval = setInterval(loadCart, 1000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [sessionId, sessionStatus]);
 
   const categories = useMemo(
     () => ["All", ...new Set(products.map((product) => product.category))],
@@ -100,94 +187,13 @@ function SelfCheckout() {
     });
   }, [products, search, category]);
 
-  const totals = useMemo(() => calculateTotals(cart), [cart]);
-  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  function addToCart(product) {
-    setMessage("");
-    setReceipt(null);
-    setCheckoutOpen(false);
-
-    if (product.stock < 1) {
-      setMessage(`${product.name} is out of stock.`);
-      return;
-    }
-
-    setCart((current) => {
-      const existing = current.find((item) => item.id === product.id);
-
-      if (existing) {
-        if (existing.quantity >= product.stock) {
-          setMessage(`Maximum available quantity reached for ${product.name}.`);
-          return current;
-        }
-
-        return current.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-
-      return [...current, { ...product, quantity: 1 }];
-    });
-  }
-
-  function updateQuantity(id, change) {
-    setMessage("");
-
-    setCart((current) =>
-      current
-        .map((item) => {
-          if (item.id !== id) return item;
-
-          const product = products.find((entry) => entry.id === id);
-          const quantity = item.quantity + change;
-
-          if (quantity > product.stock) {
-            setMessage(`Only ${product.stock} units are available.`);
-            return item;
-          }
-
-          return { ...item, quantity };
-        })
-        .filter((item) => item.quantity > 0)
-    );
-  }
-
-  function removeFromCart(id) {
-    setCart((current) => current.filter((item) => item.id !== id));
-    setMessage("");
-  }
-
-  function scanBarcode(event) {
-    event.preventDefault();
-
-    const code = barcode.trim();
-    if (!code) return;
-
-    const product = products.find((item) => item.barcode === code);
-
-    if (!product) {
-      setMessage("Product not found. Check the barcode and try again.");
-      return;
-    }
-
-    addToCart(product);
-    setBarcode("");
-    setSearch("");
-    setCategory("All");
-  }
-
-  function beginCheckout() {
-    if (!cart.length) return;
-
-    setMessage("");
-    setCheckoutOpen(true);
-  }
+  const itemCount = cart.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
 
   async function completeCheckout() {
-    if (!cart.length || processing) return;
+    if (!cart.length || !sessionId || processing) return;
 
     setProcessing(true);
     setMessage("");
@@ -199,10 +205,7 @@ function SelfCheckout() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          products: cart.map((item) => ({
-            product_id: item.id,
-            quantity: item.quantity,
-          })),
+          session_id: sessionId,
           payment_method: paymentMethod,
         }),
       });
@@ -213,27 +216,27 @@ function SelfCheckout() {
         throw new Error(data.error || "Checkout failed.");
       }
 
-      const completedTotals = data.totals || {
-        subtotal: Number(data.purchase_subtotal ?? totals.subtotal),
-        gst: Number(data.purchase_gst ?? totals.gst),
-        qst: Number(data.purchase_qst ?? totals.qst),
-        total: Number(data.purchase_total ?? totals.total),
-      };
-
       setReceipt({
-        number:
-          data.receipt_number ||
-          data.number ||
-          data.purchase_id ||
-          `ORDER-${Date.now()}`,
+        number: data.receipt_number,
         date: data.receipt_created_at
           ? new Date(data.receipt_created_at).toLocaleString("en-CA")
           : new Date().toLocaleString("en-CA"),
-        items: cart.map((item) => ({ ...item })),
-        totals: completedTotals,
+        items: (data.items || []).map((item) => ({
+          id: item.product_id,
+          name: item.product_name,
+          price: Number(item.product_price),
+          quantity: Number(item.quantity),
+        })),
+        totals: {
+          subtotal: Number(data.subtotal) || 0,
+          gst: Number(data.gst) || 0,
+          qst: Number(data.qst) || 0,
+          total: Number(data.total) || 0,
+        },
         paymentMethod,
       });
 
+      setSessionStatus("COMPLETED");
       setCart([]);
       setCheckoutOpen(false);
       await loadProducts();
@@ -244,15 +247,23 @@ function SelfCheckout() {
     }
   }
 
-  function startNewSale() {
+  async function startNewSale() {
     setReceipt(null);
     setCart([]);
+    setTotals({
+      subtotal: 0,
+      gst: 0,
+      qst: 0,
+      total: 0,
+    });
     setSearch("");
-    setBarcode("");
     setCategory("All");
     setCheckoutOpen(false);
     setMessage("");
-    loadProducts();
+    setSessionId(null);
+
+    await createCheckoutSession();
+    await loadProducts();
   }
 
   if (receipt) {
@@ -340,18 +351,15 @@ function SelfCheckout() {
             </span>
           </header>
 
-          <form className="barcode-form" onSubmit={scanBarcode}>
+          <div className="barcode-form">
             <span className="barcode-icon">▥</span>
-            <input
-              value={barcode}
-              onChange={(event) => setBarcode(event.target.value)}
-              placeholder="Scan barcode or enter product code..."
-              aria-label="Barcode"
-            />
-            <button type="submit" disabled={loading}>
-              Add item
-            </button>
-          </form>
+            <span>
+              <strong>RFID SCANNING ENABLED</strong>
+              <small>
+                Scan a tagged product at the reader to add it to your cart.
+              </small>
+            </span>
+          </div>
 
           <label className="search">
             <span>⌕</span>
@@ -385,7 +393,11 @@ function SelfCheckout() {
             ))}
           </div>
 
-          {message && <p className="message" role="status">{message}</p>}
+          {message && (
+            <p className="message" role="status">
+              {message}
+            </p>
+          )}
 
           {loading ? (
             <div className="empty">
@@ -394,9 +406,14 @@ function SelfCheckout() {
           ) : (
             <div className="product-grid">
               {filteredProducts.map((product) => {
-                const cartItem = cart.find((item) => item.id === product.id);
+                const cartItem = cart.find(
+                  (item) => item.id === product.id
+                );
                 const quantity = cartItem?.quantity || 0;
-                const unavailable = quantity >= product.stock;
+                const available = Math.max(
+                  0,
+                  product.stock - quantity
+                );
 
                 return (
                   <article className="product" key={product.id}>
@@ -412,24 +429,18 @@ function SelfCheckout() {
                               : "◈"}
                       </span>
                       {quantity > 0 && (
-                        <span className="in-cart">{quantity} IN CART</span>
+                        <span className="in-cart">
+                          {quantity} IN CART
+                        </span>
                       )}
                     </div>
                     <div className="product-info">
                       <h3>{product.name}</h3>
                       <span className="stock">
-                        {Math.max(0, product.stock - quantity)} available
+                        {available} available
                       </span>
                       <div className="product-footer">
                         <strong>{money(product.price)}</strong>
-                        <button
-                          type="button"
-                          onClick={() => addToCart(product)}
-                          disabled={unavailable}
-                          aria-label={`Add ${product.name} to cart`}
-                        >
-                          +
-                        </button>
                       </div>
                     </div>
                   </article>
@@ -468,11 +479,27 @@ function SelfCheckout() {
             <span className="count">{itemCount} ITEMS</span>
           </header>
 
+          <div className="session-status">
+            <span>
+              {sessionStatus === "ACTIVE"
+                ? "RFID SESSION ACTIVE"
+                : sessionStatus === "LOADING"
+                  ? "STARTING SESSION..."
+                  : sessionStatus === "ERROR"
+                    ? "SESSION UNAVAILABLE"
+                    : sessionStatus}
+            </span>
+            {sessionId && <span>SESSION #{sessionId}</span>}
+          </div>
+
           {cart.length === 0 ? (
             <div className="cart-empty">
               <span className="cart-empty-icon">▤</span>
               <strong>Your cart is empty</strong>
-              <p>Choose a product or scan a barcode to get started.</p>
+              <p>
+                Scan a product with the RFID reader to add it to your
+                purchase.
+              </p>
             </div>
           ) : (
             <div className="cart-items">
@@ -481,55 +508,17 @@ function SelfCheckout() {
                   <div className="cart-item-main">
                     <div>
                       <h3>{item.name}</h3>
-                      <span>{money(item.price)} each</span>
+                      <span>
+                        {item.quantity} × {money(item.price)}
+                      </span>
                     </div>
-                    <strong>{money(item.price * item.quantity)}</strong>
-                  </div>
-
-                  <div className="cart-item-controls">
-                    <div className="quantity">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, -1)}
-                        aria-label={`Decrease ${item.name} quantity`}
-                      >
-                        −
-                      </button>
-                      <span>{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, 1)}
-                        disabled={item.quantity >= item.stock}
-                        aria-label={`Increase ${item.name} quantity`}
-                      >
-                        +
-                      </button>
-                    </div>
-                    <button
-                      className="remove"
-                      type="button"
-                      onClick={() => removeFromCart(item.id)}
-                    >
-                      Remove
-                    </button>
+                    <strong>
+                      {money(item.price * item.quantity)}
+                    </strong>
                   </div>
                 </article>
               ))}
             </div>
-          )}
-
-          {cart.length > 0 && (
-            <button
-              className="clear-cart"
-              type="button"
-              onClick={() => {
-                setCart([]);
-                setMessage("");
-                setCheckoutOpen(false);
-              }}
-            >
-              Clear cart
-            </button>
           )}
 
           <div className="total-breakdown">
@@ -549,15 +538,23 @@ function SelfCheckout() {
               <span>Total</span>
               <strong>{money(totals.total)}</strong>
             </div>
-            <p>Taxes are calculated from your cart subtotal.</p>
+            <p>Taxes are calculated by the checkout service.</p>
           </div>
 
           {!checkoutOpen ? (
             <button
               className="primary"
               type="button"
-              onClick={beginCheckout}
-              disabled={!cart.length || loading}
+              onClick={() => {
+                setMessage("");
+                setCheckoutOpen(true);
+              }}
+              disabled={
+                !cart.length ||
+                loading ||
+                sessionLoading ||
+                sessionStatus !== "ACTIVE"
+              }
             >
               Proceed to payment <span>→</span>
             </button>
@@ -567,12 +564,26 @@ function SelfCheckout() {
               <h3>How would you like to pay?</h3>
 
               {[
-                { id: "card", title: "Credit / debit", detail: "External card terminal" },
-                { id: "cash", title: "Cash", detail: "Pay at the cashier" },
-                { id: "mobile", title: "Mobile payment", detail: "External payment terminal" },
+                {
+                  id: "card",
+                  title: "Credit / debit",
+                  detail: "External card terminal",
+                },
+                {
+                  id: "cash",
+                  title: "Cash",
+                  detail: "Pay at the cashier",
+                },
+                {
+                  id: "mobile",
+                  title: "Mobile payment",
+                  detail: "External payment terminal",
+                },
               ].map((method) => (
                 <button
-                  className={`payment-option ${paymentMethod === method.id ? "is-selected" : ""}`}
+                  className={`payment-option ${
+                    paymentMethod === method.id ? "is-selected" : ""
+                  }`}
                   type="button"
                   key={method.id}
                   onClick={() => setPaymentMethod(method.id)}
@@ -595,9 +606,11 @@ function SelfCheckout() {
                 className="primary"
                 type="button"
                 onClick={completeCheckout}
-                disabled={processing}
+                disabled={processing || !cart.length}
               >
-                {processing ? "Processing..." : `Complete purchase · ${money(totals.total)}`}
+                {processing
+                  ? "Processing..."
+                  : `Complete purchase · ${money(totals.total)}`}
               </button>
               <button
                 className="secondary"
@@ -609,7 +622,10 @@ function SelfCheckout() {
               </button>
             </div>
           )}
-          <div className="cart-footer">SMART TCG STORE · REGISTER 01</div>
+
+          <div className="cart-footer">
+            SMART TCG STORE · REGISTER 01
+          </div>
         </aside>
       </div>
     </main>

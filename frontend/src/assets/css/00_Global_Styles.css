@@ -138,13 +138,32 @@ label > h5 {
   padding: 0.5rem 0.5rem 1.5rem 0.5rem;
   border-bottom: 1px solid var(--blue-5);
   background: linear-gradient(45deg, var(--tone-0), var(--blue-2));
-  min-width: 100vw !important;
-  position: relative;
+  width: calc(100vw - 5px) !important;
+  position: sticky;
   left: 0;
   top: 0;
   height: 4rem;
   z-index: 9999;
   line-height: 0;
+}
+
+.page-test {
+  position: relative;
+  height: 100vh;
+  max-width: calc(100vw - 5px);
+  overflow-y: scroll;
+}
+
+.testing-overflow {
+  min-height: 100vh;
+  width: 100%;
+  border: 2px solid lime;
+  position: absolute;
+}
+
+.testing {
+  min-height: 500vh;
+  border: 2px solid hotpink;
 }
 
 .header h1 {

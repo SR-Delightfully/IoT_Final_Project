@@ -15,6 +15,7 @@ import Login from "./pages/login";
 import Home from "./pages/home";
 import Dashboard from "./pages/dashboard";
 import SelfCheckout from "./pages/selfCheckout";
+import Testing from "./pages/testing";
 
 function App() {
 
@@ -28,6 +29,7 @@ function App() {
       <Route path="/home" element={<Home />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/self-checkout" element={<SelfCheckout />} />
+      <Route path="/testing" element={<Testing />} />
     </Routes>
    </Router>
   );
