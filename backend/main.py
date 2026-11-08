@@ -1,19 +1,27 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from models.customer_model import init_db, add_customer
+
+from models.database import init_db, DB_FILE
+from models.checkout_models.model_products import get_all_products
+from services.self_checkout import SelfCheckout
+from services.rfid_reader import RFIDReader
+from models.management_models.model_fridges import get_all_fridges, update_fridge
+from models.management_models.model_readings import get_latest_reading
+from models.management_models.model_alerts import get_all_alerts
+from models.management_models.model_notifications import get_user_notifications
+from models.management_models.model_stock_receipts import (
+    get_all_stock_receipts,
+    get_stock_receipt,
+    get_stock_receipt_items,
+    add_stock_receipt,
+    delete_stock_receipt
+)
+
+from models.client_models.model_customers import add_customer
+
+from contextlib import closing
+from services.breadboardCode import login
 import json
 import sqlite3
-from models.customer_model import init_db, add_customer, DB_FILE
-from models.fridge_model import get_all_fridges, update_fridge
-from models.fridge_reading_model import get_latest_reading
-from contextlib import closing
-
-def get_connection():
-    return sqlite3.connect("../Database/iot.db")
-
-from breadboardCode import login
-#retrieve alerts for the dashboard
-from models.alert_model import get_all_alerts
-from models.notification_model import get_user_notifications
 import sys
 
 if sys.platform == "win32":
@@ -21,10 +29,9 @@ if sys.platform == "win32":
 else:
     import mqttProj
 
-
-def hardware_feedback(attempt):
+def hardware_feedback(*attempt):
     try:
-        login(attempt)
+        login(*attempt)
     except Exception as error:
         print(f"Hardware feedback unavailable: {error}")
 
@@ -37,7 +44,7 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -49,32 +56,36 @@ class Server(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
-    
+
     def do_GET(self):
-        # Get all fridge dashboard data
-        if self.path == "/fridges":
-            dashboard = []
 
-            for fridge in get_all_fridges():
-                data = dict(fridge)
-                reading = get_latest_reading(data["fridge_id"])
+        if self.path.rstrip("/") == "/fridges":
+            try:
+                dashboard = []
 
-                data["latest_reading"] = dict(reading) if reading else None
-                dashboard.append(data)
+                for fridge in get_all_fridges():
+                    data = dict(fridge)
+                    reading = get_latest_reading(data["fridge_id"])
+                    data["latest_reading"] = dict(reading) if reading else None
+                    dashboard.append(data)
 
-            self.send_json(200, dashboard)
+                self.send_json(200, {"fridges": dashboard})
+
+            except Exception as error:
+                print(f"Fridge fetch error: {error}")
+                self.send_json(500, {"error": "Could not load fridge data"})
+
             return
-        # Get all refrigerators
-        if self.path == "/fridges":
-            fridges = get_all_fridges()
-            self.send_json(200, [dict(fridge) for fridge in fridges])
-            return
+
         if self.path == "/alerts":
-            alerts = get_all_alerts()
-            self.send_json(200, [dict(alert) for alert in alerts])
+            try:
+                alerts = get_all_alerts()
+                self.send_json(200, [dict(alert) for alert in alerts])
+            except Exception as error:
+                print(f"Alert fetch error: {error}")
+                self.send_json(500, {"error": "Could not load alerts"})
             return
 
-        # Get the latest reading for a specific refrigerator
         parts = self.path.strip("/").split("/")
 
         if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "latest":
@@ -91,7 +102,7 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "No readings found"})
 
             return
-        # Get notifications for a user
+
         if len(parts) == 3 and parts[0] == "users" and parts[2] == "notifications":
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid user ID"})
@@ -103,10 +114,51 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, [dict(n) for n in notifications])
             return
 
-        self.send_json(404, {"error": "Route not found"})
-    
+        if self.path.rstrip("/") == "/products":
+            try:
+                products = []
 
-        # Update the maximum temperature for a refrigerator
+                for product in get_all_products():
+                    if not product["product_is_active"]:
+                        continue
+
+                    data = dict(product)
+                    data["product_price"] = round(data["product_price_cents"] / 100, 2)
+                    data["product_stock"] = data["product_stock_quantity"]
+                    data["product_category"] = data.pop("category_name", None)
+                    data["product_barcode"] = data.pop("barcode_value", None)
+
+                    products.append(data)
+
+                self.send_json(200, products)
+
+            except Exception as error:
+                print(f"Product fetch error: {error}")
+                self.send_json(500, {"error": "Could not load products"})
+
+            return
+        
+        if len(parts) == 3 and parts[0] == "checkout" and parts[1] == "session":
+            if not parts[2].isdigit():
+                self.send_json(400, {"error": "Invalid checkout session ID"})
+                return
+
+            try:
+                cart = self.checkout.get_cart(int(parts[2]))
+
+                if cart is None:
+                    self.send_json(404, {"error": "Checkout session not found"})
+                else:
+                    self.send_json(200, cart)
+
+            except Exception as error:
+                print(f"Checkout cart error: {error}")
+                self.send_json(500, {"error": "Could not load checkout cart"})
+
+            return    
+        
+        self.send_json(404, {"error": "Route not found"})
+
     def do_PUT(self):
         parts = self.path.strip("/").split("/")
 
@@ -123,7 +175,7 @@ class Server(BaseHTTPRequestHandler):
         try:
             length = int(self.headers.get("Content-Length", 0))
             data = json.loads(self.rfile.read(length))
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             self.send_json(400, {"error": "Invalid JSON"})
             return
 
@@ -144,58 +196,92 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, {"message": "Threshold updated"})
         else:
             self.send_json(404, {"error": "Fridge not found"})
-    def do_GET(self):
-        if self.path.rstrip("/") == "/fridges":
+
+    def do_POST(self):
+
+        if self.path == "/register":
+            self.register_customer()
+            return
+
+        if self.path == "/checkout/session":
             try:
-                with get_connection() as conn:
-                    cursor = conn.execute("""
-                        SELECT
-                            f.fridge_id,
-                            f.fridge_name,
-                            f.fridge_location,
-                            f.fridge_min_temperature,
-                            f.fridge_max_temperature,
-                            f.fridge_min_humidity,
-                            f.fridge_max_humidity,
-                            r.reading_temperature,
-                            r.reading_humidity,
-                            r.reading_recorded_at
-                        FROM Fridges AS f
-                        LEFT JOIN FridgeReadings AS r
-                            ON r.reading_id = (
-                                SELECT r2.reading_id
-                                FROM FridgeReadings AS r2
-                                WHERE r2.fridge_id = f.fridge_id
-                                ORDER BY
-                                    r2.reading_recorded_at DESC,
-                                    r2.reading_id DESC
-                                LIMIT 1
-                            )
-                        ORDER BY f.fridge_id
-                    """)
+                length = int(self.headers.get("Content-Length", 0))
+                data = json.loads(self.rfile.read(length)) if length else {}
 
-                    columns = [column[0] for column in cursor.description]
-                    fridges = [
-                        dict(zip(columns, row))
-                        for row in cursor.fetchall()
-                    ]
+                if not isinstance(data, dict):
+                    raise ValueError
 
-                self.send_json(200, {"fridges": fridges})
+                user_id = data.get("user_id")
+
+                if user_id is not None and (type(user_id) is not int or user_id <= 0):
+                    self.send_json(400, {"error": "Invalid user ID"})
+                    return
+
+                session_id = self.checkout.create_session(user_id)
+
+                self.send_json(201, {
+                    "session_id": session_id,
+                    "session_status": "ACTIVE"
+                })
+
+            except (ValueError, json.JSONDecodeError):
+                self.send_json(400, {"error": "Invalid session request"})
+
+            except sqlite3.IntegrityError as error:
+                print(f"Checkout session database error: {error}")
+                self.send_json(400, {"error": "Could not create checkout session"})
 
             except Exception as error:
-                print(f"Fridge fetch error: {error}")
-                self.send_json(
-                    500,
-                    {"error": "Could not load fridge data"}
-                )
+                print(f"Checkout session error: {error}")
+                self.send_json(500, {"error": "Could not create checkout session"})
 
             return
 
-        self.send_json(404, {"error": "Route not found"})
+        if self.path == "/checkout":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
 
-    def do_POST(self):
-        if self.path == "/register":
-            self.register_customer()
+                if length <= 0:
+                    self.send_json(400, {"error": "Request body is empty"})
+                    return
+
+                data = json.loads(self.rfile.read(length))
+
+                if not isinstance(data, dict):
+                    self.send_json(400, {"error": "Request body must be a JSON object"})
+                    return
+
+                session_id = data.get("session_id")
+                customer_id = data.get("customer_id")
+                payment_method = data.get("payment_method")
+
+                if type(session_id) is not int or session_id <= 0:
+                    self.send_json(400, {"error": "A valid session_id is required"})
+                    return
+
+                if customer_id is not None and (type(customer_id) is not int or customer_id <= 0):
+                    self.send_json(400, {"error": "Invalid customer ID"})
+                    return
+
+                receipt = self.checkout.complete_purchase(
+                    session_id,
+                    customer_id=customer_id,
+                    payment_method=payment_method
+                )
+
+                self.send_json(201, receipt)
+
+            except (ValueError, json.JSONDecodeError) as error:
+                self.send_json(400, {"error": str(error) or "Invalid checkout request"})
+
+            except sqlite3.IntegrityError as error:
+                print(f"Checkout database error: {error}")
+                self.send_json(409, {"error": "Could not complete this purchase"})
+
+            except Exception as error:
+                print(f"Checkout error: {error}")
+                self.send_json(500, {"error": "Could not complete checkout"})
+
             return
 
         self.send_json(404, {"error": "Route not found"})
@@ -216,10 +302,7 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if not isinstance(data, dict):
-            self.send_json(
-                400,
-                {"error": "Request body must be a JSON object"}
-            )
+            self.send_json(400, {"error": "Request body must be a JSON object"})
             return
 
         required_fields = [
@@ -236,10 +319,7 @@ class Server(BaseHTTPRequestHandler):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
-                self.send_json(
-                    400,
-                    {"error": f"Missing or invalid field: {field}"}
-                )
+                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
                 return
 
         if data["password"] != data["confirm_password"]:
@@ -254,7 +334,8 @@ class Server(BaseHTTPRequestHandler):
                 data["address"],
                 data["phone"],
                 data["email"],
-                data["password"]
+                data["password"],
+                is_member=data.get("is_member", False)
             )
 
             hardware_feedback(True)
@@ -281,12 +362,17 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(500, {"error": "Could not add customer"})
 
 
-
 def run_server():
     init_db()
 
+    checkout = SelfCheckout()
+    reader = RFIDReader()
+    Server.checkout = checkout
+
     if mqttProj is not None:
         mqttProj.start(db_path=DB_FILE)
+
+    reader.start(checkout.process_rfid)
 
     server_address = ("0.0.0.0", 5050)
     server = HTTPServer(server_address, Server)
@@ -295,14 +381,16 @@ def run_server():
 
     try:
         server.serve_forever()
+
     except KeyboardInterrupt:
         print("\nServer stopped")
+
     finally:
+        reader.stop()
         server.server_close()
 
         if mqttProj is not None:
             mqttProj.stop()
-
 
 if __name__ == "__main__":
     run_server()
