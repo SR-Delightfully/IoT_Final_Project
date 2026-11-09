@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import re
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-DB_FILE = BASE_DIR / "Ddatabase" / "iot.db"
+DB_FILE = BASE_DIR / "Database" / "iot.db"
 SCHEMA_FILE = BASE_DIR / "Database" / "readable.sql"
 
 @contextmanager

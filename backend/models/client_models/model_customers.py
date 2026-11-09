@@ -66,7 +66,24 @@ def add_customer(first_name, last_name, address, phone, email, password, custome
             )
         )
 
-        return cursor.lastrowid
+        customer_id = cursor.lastrowid
+
+        if is_member:
+            conn.execute(
+                """
+                INSERT INTO CustomerMemberships (
+                    customer_id,
+                    membership_tier_id,
+                    customer_membership_points
+                )
+                SELECT ?, membership_tier_id, 0
+                FROM MembershipTiers
+                WHERE membership_tier_min_points = 0
+                """,
+                (customer_id,)
+            )
+
+        return customer_id
 
 def get_customer(customer_id):
     with db_connection() as conn:
@@ -142,6 +159,21 @@ def update_customer(customer_id, values):
     if "customer_is_member" in values:
         if not isinstance(membership_value, (bool, int)) or membership_value not in (0, 1):
             raise ValueError("Invalid membership status")
+
+    if membership_value:
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO CustomerMemberships (
+                customer_id,
+                membership_tier_id,
+                customer_membership_points
+            )
+            SELECT ?, membership_tier_id, 0
+            FROM MembershipTiers
+            WHERE membership_tier_min_points = 0
+            """,
+            (customer_id,)
+        )
 
     with db_connection() as conn:
         customer = conn.execute(

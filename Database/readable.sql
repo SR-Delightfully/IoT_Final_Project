@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS Fridges (
     CHECK (fridge_min_humidity >= 0 AND fridge_max_humidity <= 100)
 );
 
+CREATE TABLE IF NOT EXISTS MembershipTiers (
+    membership_tier_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    membership_tier_name TEXT NOT NULL UNIQUE,
+    membership_tier_min_points INTEGER NOT NULL UNIQUE
+        CHECK (membership_tier_min_points >= 0)
+);
+
 -- Users become customers once they make a purchase
 CREATE TABLE IF NOT EXISTS Customers (
     customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,9 +72,25 @@ CREATE TABLE IF NOT EXISTS Customers (
         CHECK (customer_is_member IN (0, 1)),
     customer_membership_date TEXT,
     customer_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
     FOREIGN KEY (user_id)
         REFERENCES Users(user_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS CustomerMemberships (
+    customer_membership_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL UNIQUE,
+    membership_tier_id INTEGER NOT NULL DEFAULT 1,
+    customer_membership_points INTEGER NOT NULL DEFAULT 0
+        CHECK (customer_membership_points >= 0),
+    customer_membership_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id)
+        REFERENCES Customers(customer_id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+    FOREIGN KEY (membership_tier_id)
+        REFERENCES MembershipTiers(membership_tier_id)
         ON UPDATE CASCADE
         ON DELETE RESTRICT
 );
@@ -400,6 +423,56 @@ CREATE TABLE IF NOT EXISTS StockReceiptItems (
         ON DELETE RESTRICT
 );
 
+INSERT OR IGNORE INTO MembershipTiers (
+    membership_tier_name,
+    membership_tier_min_points
+)
+VALUES
+    ('Iron', 0),
+    ('Bronze', 100),
+    ('Silver', 250),
+    ('Gold', 500),
+    ('Platinum', 1000),
+    ('Emerald', 2500),
+    ('Diamond', 5000),
+    ('Master', 7500),
+    ('Grandmaster', 10000),
+    ('Challenger', 25000);
+
+CREATE TRIGGER IF NOT EXISTS update_customer_membership_tier
+AFTER UPDATE OF customer_membership_points ON CustomerMemberships
+FOR EACH ROW
+BEGIN
+    UPDATE CustomerMemberships
+    SET
+        membership_tier_id = (
+            SELECT membership_tier_id
+            FROM MembershipTiers
+            WHERE membership_tier_min_points <= NEW.customer_membership_points
+            ORDER BY membership_tier_min_points DESC
+            LIMIT 1
+        ),
+        customer_membership_updated_at = CURRENT_TIMESTAMP
+    WHERE customer_membership_id = NEW.customer_membership_id;
+END;
+
+
+CREATE TRIGGER IF NOT EXISTS set_initial_customer_membership_tier
+AFTER INSERT ON CustomerMemberships
+FOR EACH ROW
+BEGIN
+    UPDATE CustomerMemberships
+    SET
+        membership_tier_id = (
+            SELECT membership_tier_id
+            FROM MembershipTiers
+            WHERE membership_tier_min_points <= NEW.customer_membership_points
+            ORDER BY membership_tier_min_points DESC
+            LIMIT 1
+        )
+    WHERE customer_membership_id = NEW.customer_membership_id;
+END;
+
 CREATE TRIGGER IF NOT EXISTS trg_product_tag_sale_validate
 BEFORE INSERT ON ProductTagSales
 FOR EACH ROW
@@ -509,5 +582,6 @@ LEFT JOIN LoyaltyTransactions
 GROUP BY
     Customers.customer_id,
     Customers.user_id;
+
 
 COMMIT;
