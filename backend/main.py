@@ -14,6 +14,8 @@ from breadboardCode import login
 #retrieve alerts for the dashboard
 from models.alert_model import get_all_alerts
 from models.notification_model import get_user_notifications
+from models.customer_model import get_customer
+from models.purchase_model import get_customer_points, get_customer_purchases
 import sys
 
 if sys.platform == "win32":
@@ -142,6 +144,26 @@ class Server(BaseHTTPRequestHandler):
             notifications = get_user_notifications(user_id)
 
             self.send_json(200, [dict(n) for n in notifications])
+            return
+
+        # Get account info, loyalty points and purchase history for a customer
+        if len(parts) == 3 and parts[0] == "customers" and parts[2] == "account":
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid customer ID"})
+                return
+
+            customer_id = int(parts[1])
+            customer = get_customer(customer_id)
+
+            if customer is None:
+                self.send_json(404, {"error": "Customer not found"})
+                return
+
+            self.send_json(200, {
+                "customer": dict(customer),
+                "points": get_customer_points(customer_id),
+                "purchases": get_customer_purchases(customer_id)
+            })
             return
 
         self.send_json(404, {"error": "Route not found"})

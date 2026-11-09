@@ -6,12 +6,14 @@ import "./assets/css/00_Global_Styles.css";
 import "./assets/css/01_Registration_Styles.css";
 import "./assets/css/02_Home_Styles.css";
 import "./assets/css/03_Fridge_Styles.css";
+import "./assets/css/04_Account_Styles.css";
 
 // PAGE IMPORTS:
 import Registration from "./pages/registration";
 import Login from "./pages/login";
 import Home from "./pages/home";
 import Fridge from "./pages/fridge";
+import Account from "./pages/account";
 
 function App() {
 
@@ -24,6 +26,7 @@ function App() {
       <Route path="/register" element={<Registration />} />
       <Route path="/home" element={<Home />} />
       <Route path="/fridges" element={<Fridge />} />
+      <Route path="/account" element={<Account />} />
     </Routes>
    </Router>
   );
