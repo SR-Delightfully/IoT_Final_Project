@@ -153,7 +153,7 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
   );
 }
 
-function Dashboard() {
+function FridgeDashboard() {
   const [fridges, setFridges] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -381,4 +381,4 @@ function Dashboard() {
   );
 }
 
-export default Dashboard;
+export default FridgeDashboard;
