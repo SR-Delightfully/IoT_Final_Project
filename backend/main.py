@@ -5,6 +5,8 @@ import sqlite3
 from models.customer_model import init_db, add_customer, DB_FILE
 from models.fridge_model import get_all_fridges, update_fridge
 from models.fridge_reading_model import get_latest_reading
+from models.product_model import get_all_products, add_product, update_product, delete_product
+
 from contextlib import closing
 
 def get_connection():
@@ -37,7 +39,7 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE,  OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -46,7 +48,7 @@ class Server(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
     
@@ -114,6 +116,11 @@ class Server(BaseHTTPRequestHandler):
             alerts = get_all_alerts()
             self.send_json(200, [dict(alert) for alert in alerts])
             return
+            # checks for path, gets the products, and sends a json response
+        if self.path == "/products":
+            products = get_all_products()
+            self.send_json(200, products)
+            return
 
         # Get the latest reading for a specific refrigerator
         parts = self.path.strip("/").split("/")
@@ -146,9 +153,94 @@ class Server(BaseHTTPRequestHandler):
 
         self.send_json(404, {"error": "Route not found"})
 
+
+    def do_DELETE(self):
+        parts = self.path.strip("/").split("/")
+
+        if len(parts) != 2 or parts[0] != "products":
+            self.send_json(404, {"error": "Route not found"})
+            return
+
+        if not parts[1].isdigit():
+            self.send_json(400, {"error": "Invalid product ID"})
+            return
+
+        product_id = int(parts[1])
+        deleted = delete_product(product_id)
+
+        if deleted:
+            self.send_json(200, {"message": "Product removed"})
+        else:
+            self.send_json(404, {"error": "Active product not found"})
+
+
     # Update the maximum temperature for a refrigerator
     def do_PUT(self):
+        #splits after the / and divides the request in 2 (that's what we need), then checks if we have 2 parts and 1 is products, then checks if part 1 is a digit to accept
+
         parts = self.path.strip("/").split("/")
+        if len(parts) == 2 and parts[0] == "products":
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid product ID"})
+                return
+
+            product_id = int(parts[1])
+
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+
+                if length <= 0:
+                    self.send_json(400, {"error": "Request body is empty"})
+                    return
+
+                data = json.loads(self.rfile.read(length))
+            except ValueError:
+                self.send_json(400, {"error": "Invalid JSON"})
+                return
+
+            if not isinstance(data, dict):
+                self.send_json(400, {"error": "Request body must be a JSON object"})
+                return
+
+            required_fields = [
+                "product_name",
+                "product_category",
+                "product_upc",
+                "product_producer_company"
+            ]
+
+            for field in required_fields:
+                value = data.get(field)
+
+                if not isinstance(value, str) or not value.strip():
+                    self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                    return
+
+            price = data.get("product_price")
+
+            if type(price) is not int or price < 0:
+                self.send_json(400, {"error": "Price must be a non-negative integer in cents"})
+                return
+
+            try:
+                updated = update_product(
+                    product_id,
+                    data["product_name"].strip(),
+                    data["product_category"].strip(),
+                    price,
+                    data["product_upc"].strip(),
+                    data["product_producer_company"].strip()
+                )
+            except sqlite3.IntegrityError:
+                self.send_json(400, {"error": "Invalid product data or UPC already registered"})
+                return
+
+            if updated:
+                self.send_json(200, {"message": "Product updated"})
+            else:
+                self.send_json(404, {"error": "Product not found"})
+
+            return
 
         if len(parts) != 3 or parts[0] != "fridges" or parts[2] != "threshold":
             self.send_json(404, {"error": "Route not found"})
@@ -188,8 +280,91 @@ class Server(BaseHTTPRequestHandler):
         if self.path == "/register":
             self.register_customer()
             return
+            #Create a product
+        if self.path == "/products":
+            self.create_product()
+            return
 
         self.send_json(404, {"error": "Route not found"})
+
+    #Read request, check given information, check price in cents, save product and send json result
+
+    def create_product(self):
+        try:
+            content_len = int(self.headers.get("Content-Length", 0))
+
+            if content_len <= 0:
+                self.send_json(400, {"error": "Request body is empty"})
+                return
+
+            body = self.rfile.read(content_len)
+            data = json.loads(body)
+
+        except (ValueError, json.JSONDecodeError):
+            self.send_json(400, {"error": "Invalid JSON"})
+            return
+
+        if not isinstance(data, dict):
+            self.send_json(
+                400,
+                {"error": "Request body must be a JSON object"}
+            )
+            return
+
+        required_fields = [
+            "product_name",
+            "product_category",
+            "product_upc",
+            "product_producer_company"
+        ]
+
+        for field in required_fields:
+            value = data.get(field)
+
+            if not isinstance(value, str) or not value.strip():
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
+                return
+
+        price = data.get("product_price")
+
+        if type(price) is not int or price < 0:
+            self.send_json(
+                400,
+                {"error": "Price must be a non-negative integer in cents"}
+            )
+            return
+
+        try:
+            product_id = add_product(
+                data["product_name"].strip(),
+                data["product_category"].strip(),
+                price,
+                data["product_upc"].strip(),
+                data["product_producer_company"].strip()
+            )
+
+            self.send_json(
+                201,
+                {
+                    "message": "Product added",
+                    "product_id": product_id
+                }
+            )
+
+        except sqlite3.IntegrityError as error:
+            print(f"Product database error: {error}")
+            self.send_json(
+                400,
+                {"error": "Invalid product data or UPC already registered"}
+            )
+
+        except Exception as error:
+            print(f"Product creation error: {error}")
+            self.send_json(500, {"error": "Could not add product"})
+
 
     def register_customer(self):
         try:

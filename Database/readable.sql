@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS Customers (
     customer_code VARCHAR(20) UNIQUE,
     customer_address VARCHAR(255) NOT NULL,
     customer_phone VARCHAR(30),
+    customer_loyalty_points INTEGER NOT NULL DEFAULT 0
+        CHECK (customer_loyalty_points >= 0),
     FOREIGN KEY (customer_id)
         REFERENCES Users(user_id)
         ON DELETE CASCADE
@@ -99,9 +101,7 @@ ON Notifications(user_id, notification_status);
 --     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
 
-ALTER TABLE Customers
-ADD COLUMN customer_loyalty_points INTEGER NOT NULL DEFAULT 0
-CHECK (customer_loyalty_points >= 0);
+
 
 
 CREATE TABLE IF NOT EXISTS Products (
@@ -262,26 +262,40 @@ VALUES
     (1, 'Pikachu', 'Rare Card', 250, '0123456789012', 'Pikachu Inc.'),
     (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
 
+--This will prevent duplicate stock quantities when the server restarts 
+INSERT INTO StockReceptions (
+    product_id,
+    reception_quantity_received,
+    reception_note
+)
+SELECT 1, 7, 'Initial Pikachu stock'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM StockReceptions
+    WHERE product_id = 1
+      AND reception_note = 'Initial Pikachu stock'
+);
 
 INSERT INTO StockReceptions (
-    product_id, reception_quantity_received, reception_note
+    product_id,
+    reception_quantity_received,
+    reception_note
 )
-VALUES
-    (1, 7, 'Initial Pikachu stock'),
-    (2, 3, 'Initial bulbasaur stock');
+SELECT 2, 3, 'Initial bulbasaur stock'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM StockReceptions
+    WHERE product_id = 2
+      AND reception_note = 'Initial bulbasaur stock'
+);
 
 
-INSERT INTO ProductTags (
-    product_id, product_tag_epc
+INSERT OR IGNORE INTO ProductTags (
+    product_id,
+    product_tag_epc
 )
 VALUES
-    (1, 'PIKACHU-001'),
-    (1, 'PIKACHU-002'),
-    (1, 'PIKACHU-003'),
-    (1, 'PIKACHU-004'),
-    (1, 'PIKACHU-005'),
-    (1, 'PIKACHU-006'),
-    (1, 'PIKACHU-007'),
-    (2, 'BULBASAUR-001'),
-    (2, 'BULBASAUR-002'),
-    (2, 'BULBASAUR-003');
+    (1, 'A00000000000000000004983'), -- Pikachu
+    (2, 'A00000000000000000004985'), -- Bulbasaur
+    (1, 'A00000000000000000004986'), -- Pikachu
+    (2, 'A00000000000000000004949'); -- Bulbasaur
