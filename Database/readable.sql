@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS Customers (
     customer_code VARCHAR(20) UNIQUE,
     customer_address VARCHAR(255) NOT NULL,
     customer_phone VARCHAR(30),
+    customer_loyalty_points INTEGER NOT NULL DEFAULT 0
+        CHECK (customer_loyalty_points >= 0),
     FOREIGN KEY (customer_id)
         REFERENCES Users(user_id)
         ON DELETE CASCADE
@@ -99,9 +101,7 @@ ON Notifications(user_id, notification_status);
 --     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
 
-ALTER TABLE Customers
-ADD COLUMN customer_loyalty_points INTEGER NOT NULL DEFAULT 0
-CHECK (customer_loyalty_points >= 0);
+-- Older databases get customer_loyalty_points added by init_db() in customer_model.py
 
 
 CREATE TABLE IF NOT EXISTS Products (
@@ -263,15 +263,22 @@ VALUES
     (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
 
 
+-- Only add the starting stock once, not on every server start
 INSERT INTO StockReceptions (
     product_id, reception_quantity_received, reception_note
 )
-VALUES
-    (1, 7, 'Initial Pikachu stock'),
-    (2, 3, 'Initial bulbasaur stock');
+SELECT product_id, quantity, note
+FROM (
+    SELECT 1 AS product_id, 7 AS quantity, 'Initial Pikachu stock' AS note
+    UNION ALL
+    SELECT 2, 3, 'Initial bulbasaur stock'
+) AS seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM StockReceptions sr WHERE sr.product_id = seed.product_id
+);
 
 
-INSERT INTO ProductTags (
+INSERT OR IGNORE INTO ProductTags (
     product_id, product_tag_epc
 )
 VALUES
@@ -285,3 +292,49 @@ VALUES
     (2, 'BULBASAUR-001'),
     (2, 'BULBASAUR-002'),
     (2, 'BULBASAUR-003');
+
+
+-- Sample purchases for Alex (1 point per whole dollar on paid purchases)
+INSERT OR IGNORE INTO Purchases (
+    purchase_id, customer_id, purchase_total, purchase_points_earned,
+    purchase_payment_status, purchase_created_at
+)
+SELECT seed.purchase_id, u.user_id, seed.total, seed.points, seed.status, seed.created_at
+FROM (
+    SELECT 1 AS purchase_id, 500 AS total, 5 AS points, 'paid' AS status, '2026-09-05 14:12:00' AS created_at
+    UNION ALL SELECT 2, 300, 3, 'paid', '2026-09-18 10:45:00'
+    UNION ALL SELECT 3, 550, 5, 'paid', '2026-10-02 16:30:00'
+    UNION ALL SELECT 4, 250, 2, 'paid', '2026-10-15 12:05:00'
+    UNION ALL SELECT 5, 550, 5, 'paid', '2026-10-29 18:20:00'
+    UNION ALL SELECT 6, 250, 0, 'pending', '2026-11-08 09:40:00'
+) AS seed
+JOIN Users AS u ON u.user_email = 'alex.martin@example.com';
+
+INSERT OR IGNORE INTO PurchaseItems (
+    purchase_item_id, purchase_id, product_id,
+    purchase_item_name, purchase_item_quantity, purchase_item_unit_price
+)
+SELECT seed.*
+FROM (
+    SELECT 1 AS purchase_item_id, 1 AS purchase_id, 1 AS product_id, 'Pikachu' AS name, 2 AS quantity, 250 AS unit_price
+    UNION ALL SELECT 2, 2, 2, 'Bulbasaur', 1, 300
+    UNION ALL SELECT 3, 3, 1, 'Pikachu', 1, 250
+    UNION ALL SELECT 4, 3, 2, 'Bulbasaur', 1, 300
+    UNION ALL SELECT 5, 4, 1, 'Pikachu', 1, 250
+    UNION ALL SELECT 6, 5, 2, 'Bulbasaur', 1, 300
+    UNION ALL SELECT 7, 5, 1, 'Pikachu', 1, 250
+    UNION ALL SELECT 8, 6, 1, 'Pikachu', 1, 250
+) AS seed
+JOIN Purchases AS pu ON pu.purchase_id = seed.purchase_id
+JOIN Users AS u ON u.user_id = pu.customer_id AND u.user_email = 'alex.martin@example.com';
+
+-- Give Alex the points from the sample purchases, only if Alex has none yet
+UPDATE Customers
+SET customer_loyalty_points = (
+    SELECT COALESCE(SUM(purchase_points_earned), 0)
+    FROM Purchases
+    WHERE customer_id = Customers.customer_id
+      AND purchase_payment_status = 'paid'
+)
+WHERE customer_loyalty_points = 0
+  AND customer_id = (SELECT user_id FROM Users WHERE user_email = 'alex.martin@example.com');

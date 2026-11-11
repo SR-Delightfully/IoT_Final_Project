@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { downloadPurchasesCsv, fetchAccount, formatDate, formatPrice } from "../utils/purchases";
 
 const TIERS = [
   { name: "Bronze", min: 0 },
@@ -25,28 +26,12 @@ function getTierInfo(points) {
   return { current, next, progress };
 }
 
-function formatPrice(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(timestamp) {
-  return timestamp ? timestamp.split(" ")[0] : "";
-}
-
 function Account() {
   const [account, setAccount] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // no login session yet, so use the saved customer id or the sample customer
-    const customerId = localStorage.getItem("customer_id") || 1;
-
-    fetch(`http://localhost:5050/customers/${customerId}/account`)
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Could not load account");
-        return data;
-      })
+    fetchAccount()
       .then(setAccount)
       .catch((err) => setError(err.message));
   }, []);
@@ -78,6 +63,10 @@ function Account() {
     <main className="account-page">
       <div className="account-card">
         <div className="account-card-body">
+          <a href="/account/settings" className="account-button account-settings-button">
+            Settings
+          </a>
+
           <h1 className="account-title">Your Account</h1>
 
           <p className="account-subtitle">
@@ -141,7 +130,7 @@ function Account() {
                     </tr>
                   </thead>
                   <tbody>
-                    {purchases.map((p) => (
+                    {purchases.slice(0, 5).map((p) => (
                       <tr key={p.purchase_id}>
                         <td>{p.receipt_number}</td>
                         <td>{formatDate(p.purchase_created_at)}</td>
@@ -168,6 +157,21 @@ function Account() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {purchases.length > 0 && (
+              <div className="history-actions">
+                <a href="/account/purchases" className="account-button">
+                  See all purchases
+                </a>
+                <button
+                  type="button"
+                  className="account-button"
+                  onClick={() => downloadPurchasesCsv(purchases)}
+                >
+                  Download purchase history
+                </button>
               </div>
             )}
           </section>

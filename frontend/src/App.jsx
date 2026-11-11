@@ -14,6 +14,8 @@ import Login from "./pages/login";
 import Home from "./pages/home";
 import Fridge from "./pages/fridge";
 import Account from "./pages/account";
+import Settings from "./pages/settings";
+import Purchases from "./pages/purchases";
 
 function App() {
 
@@ -27,6 +29,8 @@ function App() {
       <Route path="/home" element={<Home />} />
       <Route path="/fridges" element={<Fridge />} />
       <Route path="/account" element={<Account />} />
+      <Route path="/account/settings" element={<Settings />} />
+      <Route path="/account/purchases" element={<Purchases />} />
     </Routes>
    </Router>
   );
