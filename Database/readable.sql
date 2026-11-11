@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS Categories (
     category_name TEXT NOT NULL UNIQUE,
     category_description TEXT,
     category_icon TEXT,
-    category_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    category_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    category_image_url TEXT
 );
 
 CREATE TABLE IF NOT EXISTS Rewards (

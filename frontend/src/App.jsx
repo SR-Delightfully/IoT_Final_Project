@@ -8,6 +8,7 @@ import "./assets/css/02_Home_Styles.css";
 import "./assets/css/03_Fridge_Styles.css";
 import "./assets/css/04_Dashboard_Styles.css";
 import "./assets/css/05_Checkout_Styles.css";
+import "./assets/css/99_Testing_Styles.css";
 
 // PAGE IMPORTS:
 import Registration from "./pages/registration";

@@ -1,170 +1,34 @@
-import threading
 
-from models.database import db_connection
-
-GST_RATE = 5
-QST_RATE = 9975
-
-
-def calculate_tax(subtotal_cents, rate, denominator):
-    return (subtotal_cents * rate + denominator // 2) // denominator
-
-
-def cents_to_dollars(amount):
-    return round(amount / 100, 2)
+from models.database import get_connection
 
 
 class SelfCheckout:
     def __init__(self):
-        self.lock = threading.RLock()
+        self.active_session_id = None
         self.session_tags = {}
 
     def create_session(self, user_id=None):
-        with db_connection() as conn:
+        with get_connection() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO SelfCheckoutSessions (user_id, session_status)
+                INSERT INTO SelfCheckoutSessions (
+                    user_id,
+                    session_status
+                )
                 VALUES (?, 'ACTIVE')
                 """,
                 (user_id,)
             )
+
             session_id = cursor.lastrowid
 
-        with self.lock:
-            self.session_tags[session_id] = {}
+        self.active_session_id = session_id
+        self.session_tags[session_id] = []
 
         return session_id
 
-    def get_active_session(self):
-        with db_connection() as conn:
-            row = conn.execute(
-                """
-                SELECT session_id, user_id, session_status, session_created_at
-                FROM SelfCheckoutSessions
-                WHERE session_status = 'ACTIVE'
-                ORDER BY session_id DESC
-                LIMIT 1
-                """
-            ).fetchone()
-
-        return dict(row) if row else None
-
-    def process_rfid(self, epc, rssi=None):
-        epc = epc.strip().upper() if isinstance(epc, str) else ""
-
-        if not epc:
-            return {"status": "INVALID", "message": "Invalid RFID tag."}
-
-        session = self.get_active_session()
-
-        if session is None:
-            return {
-                "status": "NO_SESSION",
-                "message": "No active checkout session."
-            }
-
-        session_id = session["session_id"]
-
-        with self.lock:
-            scanned_tags = self.session_tags.setdefault(session_id, {})
-
-            if epc in scanned_tags:
-                return {"status": "DUPLICATE", "epc": epc}
-
-            with db_connection() as conn:
-                row = conn.execute(
-                    """
-                    SELECT
-                        pt.product_tag_id,
-                        pt.product_tag_epc,
-                        p.product_id,
-                        p.product_name,
-                        p.product_price_cents,
-                        p.product_stock_quantity
-                    FROM ProductTags AS pt
-                    JOIN Products AS p ON p.product_id = pt.product_id
-                    WHERE UPPER(pt.product_tag_epc) = ?
-                        AND pt.product_tag_status = 'ACTIVE'
-                        AND p.product_is_active = 1
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM ProductTagSales AS pts
-                            WHERE pts.product_tag_id = pt.product_tag_id
-                        )
-                    """,
-                    (epc,)
-                ).fetchone()
-
-                if row is None:
-                    return {"status": "UNRECOGNIZED", "epc": epc}
-
-                if row["product_stock_quantity"] <= 0:
-                    return {
-                        "status": "OUT_OF_STOCK",
-                        "epc": epc,
-                        "product_name": row["product_name"]
-                    }
-
-                session_row = conn.execute(
-                    """
-                    SELECT session_status
-                    FROM SelfCheckoutSessions
-                    WHERE session_id = ?
-                    """,
-                    (session_id,)
-                ).fetchone()
-
-                if session_row is None or session_row["session_status"] != "ACTIVE":
-                    return {
-                        "status": "NO_SESSION",
-                        "message": "Checkout session is no longer active."
-                    }
-
-                conn.execute(
-                    """
-                    INSERT INTO SessionItems (
-                        session_id,
-                        product_id,
-                        session_item_quantity
-                    )
-                    VALUES (?, ?, 1)
-                    ON CONFLICT(session_id, product_id)
-                    DO UPDATE SET session_item_quantity =
-                        session_item_quantity + 1
-                    """,
-                    (session_id, row["product_id"])
-                )
-
-                scanned_tags[epc] = {
-                    "product_tag_id": row["product_tag_id"],
-                    "product_id": row["product_id"]
-                }
-
-        print(f"RFID scanned: {epc} | RSSI: {rssi} dBm | Session: {session_id}")
-
-        return {
-            "status": "ADDED",
-            "epc": epc,
-            "session_id": session_id,
-            "product_id": row["product_id"],
-            "product_name": row["product_name"]
-        }
-
-    def scan_products(self, scanned_epcs, session_id=None):
-        results = []
-
-        for epc in scanned_epcs or []:
-            result = self.process_rfid(epc)
-
-            if session_id is not None and result.get("session_id") != session_id:
-                continue
-
-            results.append(result)
-
-        return results
-
     def get_cart(self, session_id):
-        with db_connection() as conn:
+        with get_connection() as conn:
             session = conn.execute(
                 """
                 SELECT session_id, user_id, session_status
@@ -187,269 +51,523 @@ class SelfCheckout:
                     p.product_image_url,
                     p.product_price_cents,
                     p.product_stock_quantity,
-                    c.category_name AS product_category,
-                    b.barcode_value AS product_barcode,
-                    si.session_item_quantity AS quantity
+                    c.category_name,
+                    si.session_item_quantity
                 FROM SessionItems AS si
-                JOIN Products AS p ON p.product_id = si.product_id
-                LEFT JOIN Categories AS c ON c.category_id = p.category_id
-                LEFT JOIN BarCodes AS b ON b.product_id = p.product_id
+                JOIN Products AS p
+                    ON p.product_id = si.product_id
+                LEFT JOIN Categories AS c
+                    ON c.category_id = p.category_id
                 WHERE si.session_id = ?
-                ORDER BY p.product_name
                 """,
                 (session_id,)
             ).fetchall()
 
-        items = []
-        subtotal = 0
+        items = [dict(row) for row in rows]
 
-        for row in rows:
-            item = dict(row)
-            item["product_price"] = cents_to_dollars(item["product_price_cents"])
-            item["product_stock"] = item["product_stock_quantity"]
-            item["line_total"] = cents_to_dollars(
-                item["product_price_cents"] * item["quantity"]
-            )
+        subtotal = sum(
+            item["product_price_cents"] * item["session_item_quantity"]
+            for item in items
+        )
 
-            subtotal += item["product_price_cents"] * item["quantity"]
-            items.append(item)
-
-        gst = calculate_tax(subtotal, GST_RATE, 100)
-        qst = calculate_tax(subtotal, QST_RATE, 100000)
+        gst = round(subtotal * 0.05)
+        qst = round(subtotal * 0.09975)
 
         return {
             "session": dict(session),
             "items": items,
-            "subtotal": cents_to_dollars(subtotal),
-            "gst": cents_to_dollars(gst),
-            "qst": cents_to_dollars(qst),
-            "total": cents_to_dollars(subtotal + gst + qst),
-            "item_count": sum(item["quantity"] for item in items)
+            "subtotal": subtotal,
+            "gst": gst,
+            "qst": qst,
+            "total": subtotal + gst + qst,
+            "item_count": sum(item["session_item_quantity"] for item in items)
         }
+
+    def add_to_session(self, session_id, product_id, quantity=1):
+        if type(quantity) is not int or quantity < 1:
+            return False
+
+        with get_connection() as conn:
+            session = conn.execute(
+                """
+                SELECT session_status
+                FROM SelfCheckoutSessions
+                WHERE session_id = ?
+                """,
+                (session_id,)
+            ).fetchone()
+
+            if session is None or session["session_status"] != "ACTIVE":
+                return False
+
+            product = conn.execute(
+                """
+                SELECT product_stock_quantity, product_is_active
+                FROM Products
+                WHERE product_id = ?
+                """,
+                (product_id,)
+            ).fetchone()
+
+            if (
+                product is None
+                or not product["product_is_active"]
+                or product["product_stock_quantity"] < quantity
+            ):
+                return False
+
+            existing = conn.execute(
+                """
+                SELECT session_item_quantity
+                FROM SessionItems
+                WHERE session_id = ? AND product_id = ?
+                """,
+                (session_id, product_id)
+            ).fetchone()
+
+            current_quantity = existing["session_item_quantity"] if existing else 0
+
+            if current_quantity + quantity > product["product_stock_quantity"]:
+                return False
+
+            conn.execute(
+                """
+                INSERT INTO SessionItems (
+                    session_id,
+                    product_id,
+                    session_item_quantity
+                )
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id, product_id)
+                DO UPDATE SET
+                    session_item_quantity =
+                        session_item_quantity + excluded.session_item_quantity
+                """,
+                (session_id, product_id, quantity)
+            )
+
+        return self.get_cart(session_id)
+
+    def set_quantity(self, session_id, product_id, quantity):
+        if type(quantity) is not int or quantity < 1:
+            return False
+
+        with get_connection() as conn:
+            session = conn.execute(
+                """
+                SELECT session_status
+                FROM SelfCheckoutSessions
+                WHERE session_id = ?
+                """,
+                (session_id,)
+            ).fetchone()
+
+            if session is None or session["session_status"] != "ACTIVE":
+                return False
+
+            product = conn.execute(
+                """
+                SELECT product_stock_quantity, product_is_active
+                FROM Products
+                WHERE product_id = ?
+                """,
+                (product_id,)
+            ).fetchone()
+
+            if (
+                product is None
+                or not product["product_is_active"]
+                or quantity > product["product_stock_quantity"]
+            ):
+                return False
+
+            cursor = conn.execute(
+                """
+                UPDATE SessionItems
+                SET session_item_quantity = ?
+                WHERE session_id = ? AND product_id = ?
+                """,
+                (quantity, session_id, product_id)
+            )
+
+            if cursor.rowcount == 0:
+                return False
+
+        return self.get_cart(session_id)
+
+    def remove_from_session(self, session_id, product_id):
+        with get_connection() as conn:
+            session = conn.execute(
+                """
+                SELECT session_status
+                FROM SelfCheckoutSessions
+                WHERE session_id = ?
+                """,
+                (session_id,)
+            ).fetchone()
+
+            if session is None or session["session_status"] != "ACTIVE":
+                return False
+
+            cursor = conn.execute(
+                """
+                DELETE FROM SessionItems
+                WHERE session_id = ? AND product_id = ?
+                """,
+                (session_id, product_id)
+            )
+
+            if cursor.rowcount == 0:
+                return False
+
+        return self.get_cart(session_id)
+
+    def scan_products(self, scanned_epcs):
+        if not scanned_epcs:
+            return None
+
+        unique_epcs = list(dict.fromkeys(
+            epc.strip().upper()
+            for epc in scanned_epcs
+            if isinstance(epc, str) and epc.strip()
+        ))
+
+        if not unique_epcs:
+            return None
+
+        placeholders = ", ".join(["?"] * len(unique_epcs))
+
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    p.product_id,
+                    p.product_name,
+                    p.product_description,
+                    p.product_company,
+                    p.product_image_url,
+                    p.product_price_cents,
+                    p.product_stock_quantity,
+                    c.category_name,
+                    pt.product_tag_epc
+                FROM Products AS p
+                JOIN ProductTags AS pt
+                    ON pt.product_id = p.product_id
+                LEFT JOIN Categories AS c
+                    ON c.category_id = p.category_id
+                WHERE UPPER(pt.product_tag_epc) IN ({placeholders})
+                    AND pt.product_tag_status = 'ACTIVE'
+                    AND p.product_is_active = 1
+                    AND p.product_stock_quantity > 0
+                """,
+                unique_epcs
+            ).fetchall()
+
+        items = [dict(row) for row in rows]
+
+        subtotal = sum(item["product_price_cents"] for item in items)
+        gst = round(subtotal * 0.05)
+        qst = round(subtotal * 0.09975)
+
+        return {
+            "items": items,
+            "subtotal": subtotal,
+            "gst": gst,
+            "qst": qst,
+            "total": subtotal + gst + qst,
+            "item_count": len(items)
+        }
+
+    def scan_barcodes(self, scanned_barcodes):
+        if not scanned_barcodes:
+            return None
+
+        unique_barcodes = list(dict.fromkeys(
+            barcode.strip()
+            for barcode in scanned_barcodes
+            if isinstance(barcode, str) and barcode.strip()
+        ))
+
+        if not unique_barcodes:
+            return None
+
+        placeholders = ", ".join(["?"] * len(unique_barcodes))
+
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT
+                    p.product_id,
+                    p.product_name,
+                    p.product_description,
+                    p.product_company,
+                    p.product_image_url,
+                    p.product_price_cents,
+                    p.product_stock_quantity,
+                    c.category_name,
+                    b.barcode_value
+                FROM Products AS p
+                JOIN BarCodes AS b
+                    ON b.product_id = p.product_id
+                LEFT JOIN Categories AS c
+                    ON c.category_id = p.category_id
+                WHERE b.barcode_value IN ({placeholders})
+                    AND p.product_is_active = 1
+                    AND p.product_stock_quantity > 0
+                """,
+                unique_barcodes
+            ).fetchall()
+
+        items = [dict(row) for row in rows]
+
+        subtotal = sum(item["product_price_cents"] for item in items)
+        gst = round(subtotal * 0.05)
+        qst = round(subtotal * 0.09975)
+
+        return {
+            "items": items,
+            "subtotal": subtotal,
+            "gst": gst,
+            "qst": qst,
+            "total": subtotal + gst + qst,
+            "item_count": len(items)
+        }
+
+    def process_rfid(self, epc, rssi=None):
+        if self.active_session_id is None:
+            return None
+
+        result = self.scan_products([epc])
+
+        if not result or not result["items"]:
+            return None
+
+        product = result["items"][0]
+
+        cart = self.add_to_session(
+            self.active_session_id,
+            product["product_id"]
+        )
+
+        if cart:
+            self.session_tags.setdefault(
+                self.active_session_id, []
+            ).append(epc.upper())
+
+        return cart
 
     def complete_purchase(
         self,
         session_id,
         customer_id=None,
-        payment_method=None
+        payment_method="card"
     ):
-        with self.lock:
-            scanned_tags = dict(self.session_tags.get(session_id, {}))
+        with get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
 
-            if not scanned_tags:
-                raise ValueError(
-                    "The checkout cart is empty or its RFID scan data is unavailable."
-                )
+            session = conn.execute(
+                """
+                SELECT session_id, session_status
+                FROM SelfCheckoutSessions
+                WHERE session_id = ?
+                """,
+                (session_id,)
+            ).fetchone()
 
-            with db_connection() as conn:
-                conn.execute("BEGIN IMMEDIATE")
+            if session is None or session["session_status"] != "ACTIVE":
+                return False
 
-                session = conn.execute(
+            if customer_id is not None:
+                customer = conn.execute(
                     """
-                    SELECT session_id
-                    FROM SelfCheckoutSessions
-                    WHERE session_id = ? AND session_status = 'ACTIVE'
+                    SELECT customer_id
+                    FROM Customers
+                    WHERE customer_id = ?
                     """,
-                    (session_id,)
+                    (customer_id,)
                 ).fetchone()
 
-                if session is None:
-                    raise ValueError(
-                        "Checkout session not found or is no longer active."
-                    )
+                if customer is None:
+                    return False
 
-                if customer_id is not None:
-                    customer = conn.execute(
-                        "SELECT customer_id FROM Customers WHERE customer_id = ?",
-                        (customer_id,)
-                    ).fetchone()
+            items = conn.execute(
+                """
+                SELECT
+                    p.product_id,
+                    p.product_name,
+                    p.product_price_cents,
+                    p.product_stock_quantity,
+                    si.session_item_quantity
+                FROM SessionItems AS si
+                JOIN Products AS p
+                    ON p.product_id = si.product_id
+                WHERE si.session_id = ?
+                    AND p.product_is_active = 1
+                """,
+                (session_id,)
+            ).fetchall()
 
-                    if customer is None:
-                        raise ValueError("Customer not found.")
+            if not items:
+                return False
 
-                tag_ids = [
-                    tag["product_tag_id"]
-                    for tag in scanned_tags.values()
-                ]
-                placeholders = ", ".join("?" for _ in tag_ids)
+            for item in items:
+                if item["session_item_quantity"] > item["product_stock_quantity"]:
+                    return False
 
-                rows = conn.execute(
-                    f"""
-                    SELECT
-                        pt.product_tag_id,
-                        pt.product_tag_epc,
-                        p.product_id,
-                        p.product_name,
-                        p.product_price_cents,
-                        p.product_stock_quantity
-                    FROM ProductTags AS pt
-                    JOIN Products AS p ON p.product_id = pt.product_id
-                    WHERE pt.product_tag_id IN ({placeholders})
-                        AND pt.product_tag_status = 'ACTIVE'
-                        AND p.product_is_active = 1
-                        AND NOT EXISTS (
-                            SELECT 1 FROM ProductTagSales AS pts
-                            WHERE pts.product_tag_id = pt.product_tag_id
-                        )
-                    """,
-                    tag_ids
-                ).fetchall()
+            subtotal = sum(
+                item["product_price_cents"] * item["session_item_quantity"]
+                for item in items
+            )
 
-                if len(rows) != len(tag_ids):
-                    raise ValueError(
-                        "One or more scanned products are no longer available."
-                    )
+            gst = round(subtotal * 0.05)
+            qst = round(subtotal * 0.09975)
+            discount = 0
+            total = subtotal + gst + qst - discount
 
-                products = {}
+            purchase_id = conn.execute(
+                """
+                INSERT INTO Purchases (
+                    customer_id,
+                    session_id,
+                    purchase_subtotal_cents,
+                    purchase_gst_cents,
+                    purchase_qst_cents,
+                    purchase_discount_cents,
+                    purchase_total_cents,
+                    purchase_payment_method,
+                    purchase_status
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')
+                """,
+                (
+                    customer_id,
+                    session_id,
+                    subtotal,
+                    gst,
+                    qst,
+                    discount,
+                    total,
+                    payment_method
+                )
+            ).lastrowid
 
-                for row in rows:
-                    product = dict(row)
-                    product_id = product["product_id"]
+            purchase_items = {}
 
-                    products.setdefault(product_id, {
-                        "product_id": product_id,
-                        "product_name": product["product_name"],
-                        "product_price_cents": product["product_price_cents"],
-                        "product_stock_quantity": product["product_stock_quantity"],
-                        "tags": []
-                    })
+            for item in items:
+                quantity = item["session_item_quantity"]
 
-                    products[product_id]["tags"].append(
-                        product["product_tag_id"]
-                    )
-
-                subtotal = 0
-
-                for product in products.values():
-                    quantity = len(product["tags"])
-
-                    if quantity > product["product_stock_quantity"]:
-                        raise ValueError(
-                            f"Insufficient stock for {product['product_name']}."
-                        )
-
-                    subtotal += product["product_price_cents"] * quantity
-
-                gst = calculate_tax(subtotal, GST_RATE, 100)
-                qst = calculate_tax(subtotal, QST_RATE, 100000)
-                total = subtotal + gst + qst
-
-                purchase_id = conn.execute(
+                purchase_item_id = conn.execute(
                     """
-                    INSERT INTO Purchases (
-                        customer_id,
-                        session_id,
-                        purchase_subtotal_cents,
-                        purchase_gst_cents,
-                        purchase_qst_cents,
-                        purchase_discount_cents,
-                        purchase_total_cents,
-                        purchase_payment_method,
-                        purchase_status
+                    INSERT INTO PurchaseItems (
+                        purchase_id,
+                        product_id,
+                        purchase_item_quantity,
+                        purchase_item_unit_price_cents
                     )
-                    VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'COMPLETED')
+                    VALUES (?, ?, ?, ?)
                     """,
                     (
-                        customer_id,
-                        session_id,
-                        subtotal,
-                        gst,
-                        qst,
-                        total,
-                        payment_method
+                        purchase_id,
+                        item["product_id"],
+                        quantity,
+                        item["product_price_cents"]
                     )
                 ).lastrowid
 
-                receipt_items = []
-
-                for product in products.values():
-                    quantity = len(product["tags"])
-
-                    purchase_item_id = conn.execute(
-                        """
-                        INSERT INTO PurchaseItems (
-                            purchase_id,
-                            product_id,
-                            purchase_item_quantity,
-                            purchase_item_unit_price_cents
-                        )
-                        VALUES (?, ?, ?, ?)
-                        """,
-                        (
-                            purchase_id,
-                            product["product_id"],
-                            quantity,
-                            product["product_price_cents"]
-                        )
-                    ).lastrowid
-
-                    updated = conn.execute(
-                        """
-                        UPDATE Products
-                        SET product_stock_quantity = product_stock_quantity - ?
-                        WHERE product_id = ? AND product_stock_quantity >= ?
-                        """,
-                        (quantity, product["product_id"], quantity)
-                    ).rowcount
-
-                    if updated != 1:
-                        raise ValueError(
-                            f"Could not update stock for {product['product_name']}."
-                        )
-
-                    for product_tag_id in product["tags"]:
-                        conn.execute(
-                            """
-                            INSERT INTO ProductTagSales (
-                                product_tag_id,
-                                purchase_item_id
-                            )
-                            VALUES (?, ?)
-                            """,
-                            (product_tag_id, purchase_item_id)
-                        )
-
-                    receipt_items.append({
-                        "product_id": product["product_id"],
-                        "product_name": product["product_name"],
-                        "product_price": cents_to_dollars(
-                            product["product_price_cents"]
-                        ),
-                        "quantity": quantity
-                    })
+                purchase_items[item["product_id"]] = purchase_item_id
 
                 conn.execute(
                     """
-                    UPDATE SelfCheckoutSessions
-                    SET session_status = 'COMPLETED',
-                        session_completed_at = CURRENT_TIMESTAMP
-                    WHERE session_id = ?
+                    UPDATE Products
+                    SET product_stock_quantity = product_stock_quantity - ?,
+                        product_updated_at = CURRENT_TIMESTAMP
+                    WHERE product_id = ?
                     """,
-                    (session_id,)
+                    (quantity, item["product_id"])
                 )
 
-                receipt_number = f"STS-{purchase_id:06d}"
-
-                receipt_id = conn.execute(
+            for epc in self.session_tags.get(session_id, []):
+                tag = conn.execute(
                     """
-                    INSERT INTO Receipts (purchase_id, receipt_number)
-                    VALUES (?, ?)
+                    SELECT product_tag_id, product_id
+                    FROM ProductTags
+                    WHERE UPPER(product_tag_epc) = ?
                     """,
-                    (purchase_id, receipt_number)
-                ).lastrowid
-
-                receipt = conn.execute(
-                    "SELECT * FROM Receipts WHERE receipt_id = ?",
-                    (receipt_id,)
+                    (epc.upper(),)
                 ).fetchone()
 
-            self.session_tags.pop(session_id, None)
+                if tag is None or tag["product_id"] not in purchase_items:
+                    continue
 
-        return {
-            **dict(receipt),
-            "items": receipt_items,
-            "subtotal": cents_to_dollars(subtotal),
-            "gst": cents_to_dollars(gst),
-            "qst": cents_to_dollars(qst),
-            "total": cents_to_dollars(total)
-        }
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO ProductTagSales (
+                        product_tag_id,
+                        purchase_item_id
+                    )
+                    VALUES (?, ?)
+                    """,
+                    (
+                        tag["product_tag_id"],
+                        purchase_items[tag["product_id"]]
+                    )
+                )
+
+            receipt_number = f"ST-{purchase_id:08d}"
+
+            receipt_id = conn.execute(
+                """
+                INSERT INTO Receipts (
+                    purchase_id,
+                    receipt_number
+                )
+                VALUES (?, ?)
+                """,
+                (purchase_id, receipt_number)
+            ).lastrowid
+
+            conn.execute(
+                """
+                UPDATE SelfCheckoutSessions
+                SET session_status = 'COMPLETED',
+                    session_completed_at = CURRENT_TIMESTAMP
+                WHERE session_id = ?
+                """,
+                (session_id,)
+            )
+
+            receipt = conn.execute(
+                """
+                SELECT *
+                FROM Receipts
+                WHERE receipt_id = ?
+                """,
+                (receipt_id,)
+            ).fetchone()
+
+            receipt_data = dict(receipt)
+
+            receipt_data.update({
+                "purchase_id": purchase_id,
+                "items": [
+                    {
+                        "product_id": item["product_id"],
+                        "product_name": item["product_name"],
+                        "product_price": item["product_price_cents"] / 100,
+                        "session_item_quantity": item["session_item_quantity"]
+                    }
+                    for item in items
+                ],
+                "subtotal": subtotal / 100,
+                "gst": gst / 100,
+                "qst": qst / 100,
+                "discount": discount / 100,
+                "total": total / 100
+            })
+
+        self.session_tags.pop(session_id, None)
+
+        if self.active_session_id == session_id:
+            self.active_session_id = None
+
+        return receipt_data
