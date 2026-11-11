@@ -2,11 +2,12 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from models.customer_model import init_db, add_customer
 import json
 import sqlite3
-from models.customer_model import init_db, add_customer, DB_FILE
+from models.customer_model import init_db, add_customer, get_customer, DB_FILE
 from models.fridge_model import get_all_fridges, update_fridge
 from models.fridge_reading_model import get_latest_reading
 from models.product_model import get_all_products, add_product, update_product, delete_product
-
+from models.stock_reception_model import add_stock_reception
+from models.user_model import authenticate_user
 from contextlib import closing
 
 def get_connection():
@@ -284,8 +285,138 @@ class Server(BaseHTTPRequestHandler):
         if self.path == "/products":
             self.create_product()
             return
+        if self.path == "/stock-receptions":
+            self.receive_stock()
+            return
+        if self.path == "/login":
+            self.login_user()
+            return
 
         self.send_json(404, {"error": "Route not found"})
+    #Checks email, password, uses authenticate_user and then returns a JSON reponse
+    def login_user(self):
+        try:
+            content_len = int(self.headers.get("Content-Length", 0))
+
+            if content_len <= 0:
+                self.send_json(400, {"error": "Request body is empty"})
+                return
+
+            body = self.rfile.read(content_len)
+            data = json.loads(body)
+
+        except ValueError:
+            self.send_json(400, {"error": "Invalid JSON"})
+            return
+
+        if not isinstance(data, dict):
+            self.send_json(
+                400,
+                {"error": "Request body must be a JSON object"}
+            )
+            return
+
+        required_fields = ["email", "password"]
+
+        for field in required_fields:
+            value = data.get(field)
+
+            if not isinstance(value, str) or not value.strip():
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
+                return
+
+        try:
+            user = authenticate_user(
+                data["email"],
+                data["password"]
+            )
+
+        except sqlite3.Error as error:
+            print(f"Login database error: {error}")
+            self.send_json(500, {"error": "Could not log in"})
+            return
+
+        if not user:
+            self.send_json(
+                401,
+                {"error": "Invalid email or password"}
+            )
+            return
+
+        self.send_json(
+            200,
+            {
+                "message": "Login successful",
+                "user": user
+            }
+        )
+#Reads the given ProductID, positive quantity. Returns new receptionID
+    def receive_stock(self):
+        try:
+            content_len = int(self.headers.get("Content-Length", 0))
+
+            if content_len <= 0:
+                self.send_json(400, {"error": "Request body is empty"})
+                return
+
+            body = self.rfile.read(content_len)
+            data = json.loads(body)
+
+        except ValueError:
+            self.send_json(400, {"error": "Invalid JSON"})
+            return
+
+        if not isinstance(data, dict):
+            self.send_json(
+                400,
+                {"error": "Request body must be a JSON object"}
+            )
+            return
+
+        product_id = data.get("product_id")
+        quantity = data.get("quantity")
+        note = data.get("note")
+
+        if type(product_id) is not int or product_id <= 0:
+            self.send_json(400, {"error": "Invalid product ID"})
+            return
+
+        if type(quantity) is not int or quantity <= 0:
+            self.send_json(
+                400,
+                {"error": "Quantity must be a positive integer"}
+            )
+            return
+
+        if note is not None and not isinstance(note, str):
+            self.send_json(400, {"error": "Note must be text"})
+            return
+
+        try:
+            reception_id = add_stock_reception(
+                product_id,
+                quantity,
+                note
+            )
+
+            self.send_json(
+                201,
+                {
+                    "message": "Stock received",
+                    "reception_id": reception_id
+                }
+            )
+
+        except sqlite3.IntegrityError as error:
+            print(f"Stock reception error: {error}")
+            self.send_json(
+                400,
+                {"error": "Product does not exist or stock data is invalid"}
+            )
+
 
     #Read request, check given information, check price in cents, save product and send json result
 
@@ -422,6 +553,7 @@ class Server(BaseHTTPRequestHandler):
                 data["email"],
                 data["password"]
             )
+            customer = get_customer(customer_id) #Uses ID to get the Info 
 
             hardware_feedback(True)
 
@@ -429,7 +561,8 @@ class Server(BaseHTTPRequestHandler):
                 201,
                 {
                     "message": "Customer added",
-                    "customer_id": customer_id
+                    "customer_id": customer_id,
+                    "customer_code": customer["customer_code"] #include the MEM number in the response
                 }
             )
 

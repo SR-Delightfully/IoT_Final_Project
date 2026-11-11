@@ -69,6 +69,9 @@ def add_customer(
         )
 
         customer_id = cursor.lastrowid
+        #Creates a new membership ID with the users ID 
+        if customer_code is None:
+            customer_code = f"MEM{customer_id:08d}"
 
         conn.execute(
             """
