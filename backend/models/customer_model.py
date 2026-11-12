@@ -107,7 +107,8 @@ def get_customer(customer_id):
                 u.user_created_at,
                 c.customer_code,
                 c.customer_address,
-                c.customer_phone
+                c.customer_phone,
+                c.customer_loyalty_points
             FROM Users u
             JOIN Customers c ON c.customer_id = u.user_id
             WHERE c.customer_id = ?

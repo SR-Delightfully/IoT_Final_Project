@@ -8,6 +8,8 @@ from models.fridge_reading_model import get_latest_reading
 from models.product_model import get_all_products, add_product, update_product, delete_product
 from models.stock_reception_model import add_stock_reception
 from models.user_model import authenticate_user
+import secrets #This is included in python and I will use it to generate random login tokens 
+from models.purchase_model import get_customer_purchases, get_customer_receipt, complete_purchase
 from contextlib import closing
 
 def get_connection():
@@ -31,6 +33,7 @@ def hardware_feedback(attempt):
     except Exception as error:
         print(f"Hardware feedback unavailable: {error}")
 
+SESSIONS = {} # is a python dictionnary(associative array)
 
 class Server(BaseHTTPRequestHandler):
 
@@ -41,7 +44,7 @@ class Server(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE,  OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization") #The frontend is allowed to send the login token
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -50,10 +53,33 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.end_headers()
+
+    #Reads frontends token to match with what we have in the SESsIONS array
+    def get_logged_in_user_id(self):
+        auth_header = self.headers.get("Authorization", "")
+        parts = auth_header.split()
+
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            return None
+
+        token = parts[1]
+
+        return SESSIONS.get(token)
     
     def do_GET(self):
+        if self.path == "/account/purchases":
+            user_id = self.get_logged_in_user_id()
+
+            if user_id is None:
+                self.send_json(401, {"error": "Please log in"})
+                return
+
+            purchases = get_customer_purchases(user_id)
+
+            self.send_json(200, purchases)
+            return
         # Get all fridge dashboard data
         if self.path == "/fridges/dashboard":
             dashboard = []
@@ -125,6 +151,26 @@ class Server(BaseHTTPRequestHandler):
 
         # Get the latest reading for a specific refrigerator
         parts = self.path.strip("/").split("/")
+        if len(parts) == 3 and parts[0] == "account" and parts[1] == "purchases":
+            user_id = self.get_logged_in_user_id()
+
+            if user_id is None:
+                self.send_json(401, {"error": "Please log in"})
+                return
+
+            if not parts[2].isdigit():
+                self.send_json(400, {"error": "Invalid purchase ID"})
+                return
+
+            purchase_id = int(parts[2])
+            receipt = get_customer_receipt(user_id, purchase_id)
+
+            if receipt is None:
+                self.send_json(404, {"error": "Receipt not found"})
+                return
+
+            self.send_json(200, receipt)
+            return
 
         if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "latest":
             if not parts[1].isdigit():
@@ -150,6 +196,23 @@ class Server(BaseHTTPRequestHandler):
             notifications = get_user_notifications(user_id)
 
             self.send_json(200, [dict(n) for n in notifications])
+            return
+
+            #Reads the token and looks for the user ID, gets customers info
+        if self.path == "/account":
+            user_id = self.get_logged_in_user_id()
+
+            if user_id is None:
+                self.send_json(401, {"error": "Please log in"})
+                return
+
+            customer = get_customer(user_id)
+
+            if customer is None:
+                self.send_json(404, {"error": "Customer account not found"})
+                return
+
+            self.send_json(200, dict(customer)) #converts the db row into a dictio0nnary that we can send using send_json()
             return
 
         self.send_json(404, {"error": "Route not found"})
@@ -291,6 +354,9 @@ class Server(BaseHTTPRequestHandler):
         if self.path == "/login":
             self.login_user()
             return
+        if self.path == "/checkout":
+            self.complete_checkout()
+            return
 
         self.send_json(404, {"error": "Route not found"})
     #Checks email, password, uses authenticate_user and then returns a JSON reponse
@@ -346,10 +412,15 @@ class Server(BaseHTTPRequestHandler):
             )
             return
 
+        token = secrets.token_urlsafe(32) #Gnerates random text tocken 32 bytes
+
+        SESSIONS[token] = user["user_id"] #Adds a pair to the array
+
         self.send_json(
             200,
             {
                 "message": "Login successful",
+                "token": token, #Frontend receives the token value
                 "user": user
             }
         )
@@ -416,6 +487,54 @@ class Server(BaseHTTPRequestHandler):
                 400,
                 {"error": "Product does not exist or stock data is invalid"}
             )
+
+
+    def complete_checkout(self):
+        customer_id = self.get_logged_in_user_id()
+
+        if self.headers.get("Authorization") is not None and customer_id is None:
+            self.send_json(401, {"error": "Please log in again"})
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+
+            if length <= 0:
+                self.send_json(400, {"error": "Request body is empty"})
+                return
+
+            data = json.loads(self.rfile.read(length))
+
+        except ValueError:
+            self.send_json(400, {"error": "Invalid JSON"})
+            return
+
+        if not isinstance(data, dict):
+            self.send_json(
+                400,
+                {"error": "Request body must be a JSON object"}
+            )
+            return
+
+        try:
+            purchase_id = complete_purchase(
+                customer_id,
+                data.get("epcs")
+            )
+
+            receipt = get_customer_receipt(customer_id, purchase_id)
+            self.send_json(201, receipt)
+
+        except ValueError as error:
+            self.send_json(400, {"error": str(error)})
+
+        except sqlite3.IntegrityError as error:
+            print(f"Checkout database error: {error}")
+            self.send_json(400, {"error": "Invalid purchase data"})
+
+        except sqlite3.Error as error:
+            print(f"Checkout error: {error}")
+            self.send_json(500, {"error": "Could not complete purchase"})
 
 
     #Read request, check given information, check price in cents, save product and send json result
