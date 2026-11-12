@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router"; 
 import Header from "../layout/header";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050";
@@ -60,6 +61,7 @@ function getCategorySymbol(category) {
 }
 
 function SelfCheckout() {
+  const navigate = useNavigate(); 
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
 
@@ -77,7 +79,6 @@ function SelfCheckout() {
   const [category, setCategory] = useState("Browse");
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [receipt, setReceipt] = useState(null);
   const [message, setMessage] = useState("");
 
   const [loading, setLoading] = useState(true);
@@ -338,8 +339,8 @@ function SelfCheckout() {
     (sum, item) => sum + item.quantity,
     0
   );
-
-  async function completeCheckout() {
+  
+  async function completeCheckout() { 
     if (!cart.length || !sessionId || processing) return;
 
     setProcessing(true);
@@ -354,11 +355,12 @@ function SelfCheckout() {
         }),
       });
 
-      setReceipt({
+      const receiptData = {
         number: data.receipt_number,
         date: data.receipt_created_at
           ? new Date(data.receipt_created_at).toLocaleString("en-CA")
           : new Date().toLocaleString("en-CA"),
+
         items: (data.items || []).map((item) => ({
           id: item.product_id,
           name: item.product_name,
@@ -367,13 +369,26 @@ function SelfCheckout() {
             item.session_item_quantity ?? item.quantity
           ) || 0,
         })),
+
         totals: {
           subtotal: Number(data.subtotal) || 0,
           gst: Number(data.gst) || 0,
           qst: Number(data.qst) || 0,
           total: Number(data.total) || 0,
         },
+
         paymentMethod,
+      };
+
+      // Saves receipt page for refreshes. 
+      sessionStorage.setItem(
+        "receipt",
+        JSON.stringify(receiptData)
+      );
+
+      // Go to receipt page. 
+      navigate("/self-checkout/receipt", {
+        state: { receipt: receiptData },
       });
 
       setSessionStatus("COMPLETED");
@@ -381,30 +396,12 @@ function SelfCheckout() {
       setCheckoutOpen(false);
 
       await loadProducts();
+
     } catch (error) {
       setMessage(error.message || "Could not complete purchase.");
     } finally {
       setProcessing(false);
     }
-  }
-
-  async function startNewSale() {
-    setReceipt(null);
-    setCart([]);
-    setTotals({
-      subtotal: 0,
-      gst: 0,
-      qst: 0,
-      total: 0,
-    });
-    setSearch("");
-    setCategory("Browse");
-    setCheckoutOpen(false);
-    setMessage("");
-    setSessionId(null);
-
-    await createCheckoutSession();
-    await loadProducts();
   }
 
   function selectCategory(item) {
@@ -417,83 +414,6 @@ function SelfCheckout() {
     setCategory("Browse");
     setSearch("");
     setMessage("");
-  }
-
-  if (receipt) {
-    return (
-      <main className="self-checkout-page">
-        <section className="receipt">
-          <div className="success-icon">✓</div>
-
-          <span className="eyebrow">TRANSACTION COMPLETE</span>
-
-          <h1>Thank you!</h1>
-
-          <p className="muted">
-            Your purchase has been recorded successfully.
-          </p>
-
-          <div className="receipt-paper">
-            <div className="receipt-header">
-              <strong>SMART TCG STORE</strong>
-              <span>SELF-CHECKOUT RECEIPT</span>
-              <span>{receipt.date}</span>
-              <span>Order #{receipt.number}</span>
-            </div>
-
-            <div className="receipt-items">
-              {receipt.items.map((item, index) => (
-                <div className="receipt-item" key={`${item.id}-${index}`}>
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.quantity} × {money(item.price)}
-                    </span>
-                  </div>
-
-                  <strong>{money(item.price * item.quantity)}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div className="receipt-totals">
-              <div>
-                <span>Subtotal</span>
-                <span>{money(receipt.totals.subtotal)}</span>
-              </div>
-
-              <div>
-                <span>GST (5%)</span>
-                <span>{money(receipt.totals.gst)}</span>
-              </div>
-
-              <div>
-                <span>QST (9.975%)</span>
-                <span>{money(receipt.totals.qst)}</span>
-              </div>
-
-              <div className="receipt-total">
-                <strong>TOTAL</strong>
-                <strong>{money(receipt.totals.total)}</strong>
-              </div>
-
-              <div>
-                <span>Payment method selected</span>
-                <span>{receipt.paymentMethod.toUpperCase()}</span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            className="primary new-sale"
-            type="button"
-            onClick={startNewSale}
-          >
-            Start new sale
-          </button>
-        </section>
-      </main>
-    );
   }
 
   return (
@@ -954,7 +874,7 @@ function SelfCheckout() {
           )}
 
           <div className="cart-footer">
-            SMART TCG STORE · REGISTER 01
+            SMART TCG STORE
           </div>
         </aside>
       </div>

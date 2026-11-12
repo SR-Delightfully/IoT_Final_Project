@@ -1,0 +1,204 @@
+.manual-card-page {
+  position: relative;
+  isolation: isolate;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  width: 100%;
+  min-height: 100dvh;
+
+  padding: 3rem 1.5rem;
+
+  color: var(--blue-9);
+}
+
+.manual-card-container {
+  position: relative;
+  z-index: 1;
+
+  width: min(100%, 650px);
+
+  padding: clamp(1.5rem, 4vw, 3rem);
+
+  border: 2px solid var(--gold-5);
+
+  background: linear-gradient(
+    145deg,
+    var(--blue-2),
+    var(--blue-1) 70%,
+    var(--blue-0)
+  );
+
+  box-shadow:
+    0 15px 45px rgba(0, 0, 0, 0.5),
+    inset 0 0 25px rgba(101, 111, 176, 0.08);
+
+  animation: cardReveal var(--transition-1) both;
+}
+
+.manual-card-header {
+  text-align: center;
+}
+
+.manual-card-eyebrow {
+  display: block;
+  margin-bottom: 0.8rem;
+
+  color: var(--gold-6);
+
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.manual-card-header h1 {
+  margin: 0;
+
+  color: var(--gold-7);
+
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.manual-card-header p {
+  margin-top: 0.8rem;
+
+  color: var(--blue-8);
+  font-size: 0.85rem;
+}
+
+.manual-card-divider {
+  width: 100%;
+  margin: 1.5rem 0;
+
+  border-top: 1px solid var(--gold-4);
+}
+
+.manual-card-fields {
+  padding: 1rem;
+
+  border: 1px solid var(--gold-4);
+
+  background: var(--blue-1);
+}
+
+.manual-card-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.manual-card-submit {
+  width: 100%;
+  padding: 1rem;
+
+  border: 1px solid var(--gold-6);
+
+  background: linear-gradient(
+    145deg,
+    var(--gold-6),
+    var(--gold-5)
+  );
+
+  color: var(--blue-0);
+
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+
+  cursor: pointer;
+
+  transition:
+    background var(--transition-2),
+    transform var(--transition-2);
+}
+
+.manual-card-submit:hover:not(:disabled) {
+  background: var(--gold-7);
+  transform: translateY(-2px);
+}
+
+.manual-card-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manual-card-error {
+  padding: 0.8rem 1rem;
+
+  border: 1px solid #a94442;
+  background: rgba(169, 68, 66, 0.12);
+
+  color: #e9a5a5;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.manual-card-status {
+  color: var(--gold-7);
+  text-align: center;
+}
+
+.manual-card-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+
+  border-top: 1px solid var(--gold-4);
+
+  color: var(--blue-7);
+
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+
+  text-align: center;
+}
+
+.manual-card-cancel {
+  position: fixed;
+  z-index: 10;
+
+  bottom: 1.5rem;
+  left: 1.5rem;
+
+  padding: 0.7rem 1.5rem;
+
+  border: 1px solid var(--gold-5);
+
+  background: var(--blue-2);
+  color: var(--gold-7);
+
+  font-size: 0.85rem;
+  font-weight: 800;
+
+  cursor: pointer;
+}
+
+.manual-card-cancel:hover:not(:disabled) {
+  border-color: var(--gold-7);
+  background: var(--blue-4);
+  color: var(--gold-8);
+}
+
+.manual-card-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .manual-card-page {
+    padding: 1.5rem 1rem 5rem;
+  }
+
+  .manual-card-container {
+    padding: 1.2rem;
+  }
+
+  .manual-card-cancel {
+    bottom: 0.8rem;
+    left: 0.8rem;
+  }
+}

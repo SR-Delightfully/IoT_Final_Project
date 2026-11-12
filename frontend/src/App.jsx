@@ -8,6 +8,9 @@ import "./assets/css/02_Home_Styles.css";
 import "./assets/css/03_Fridge_Styles.css";
 import "./assets/css/04_Dashboard_Styles.css";
 import "./assets/css/05_Checkout_Styles.css";
+import "./assets/css/06_PaymentOptions_Styles.css";
+import "./assets/css/07_PaymentProcess_Styles.css";
+import "./assets/css/08_Receipt_Styles.css";
 import "./assets/css/99_Testing_Styles.css";
 
 // PAGE IMPORTS:
@@ -16,6 +19,9 @@ import Login from "./pages/login";
 import Home from "./pages/home";
 import FridgeDashboard from "./pages/fridgeDashboard";
 import SelfCheckout from "./pages/selfCheckout";
+import PaymentOptions from "./pages/paymentOptions";
+import PaymentProcess from "./pages/paymentProcess";
+import Receipt from "./pages/receipt";
 import Testing from "./pages/testing";
 
 function App() {
@@ -40,8 +46,9 @@ function App() {
       
 
       <Route path="/self-checkout" element={<SelfCheckout />} />
-      <Route path="/self-checkout/process-transaction" element={<p>{/* TODO: transaction simulation */}</p>} />
-      <Route path="/self-checkout/receipt" element={<p>{/* TODO: display receipt of purchased products */}</p>} />
+      <Route path="/self-checkout/transaction-options" element={<PaymentOptions />} />
+      <Route path="/self-checkout/process-transaction" element={<PaymentProcess />} />
+      <Route path="/receipt" element={<Receipt/>} />
       
       <Route path="/testing" element={<Testing />} />
     </Routes>
