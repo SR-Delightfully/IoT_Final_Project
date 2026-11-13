@@ -1,19 +1,28 @@
+/*
+ * PAYMENT PAGE LAYOUT
+ * The page uses the full visible browser height. Its content is centered in
+ * the space above the fixed Cancel button, without creating page scrollbars.
+ */
 .payment-page {
   position: relative;
-  isolation: isolate;
+  isolation: isolate; /* Keeps this page's stacking order separate from other layers. */
 
   display: flex;
-  justify-content: center;
-  align-items: center;
+  justify-content: center; /* Center the card from left to right. */
+  align-items: center; /* Center the card from top to bottom. */
 
   width: 100%;
-  min-height: 100dvh;
+  height: 100vh; /* Fallback for browsers without dynamic viewport units. */
+  height: 100dvh; /* Match the currently visible browser height, including mobile UI. */
 
-  padding: 3rem 1.5rem;
+  /* Reserve room at the bottom so the Cancel button does not cover the card. */
+  padding: 1rem 1.5rem 4.25rem;
 
+  overflow: hidden; /* Prevent this page from scrolling. */
   color: var(--blue-9);
 }
 
+/* Main panel that contains the heading, payment choices, and messages. */
 .payment-card {
   position: relative;
   z-index: 1;
@@ -23,11 +32,12 @@
   align-items: center;
 
   width: min(100%, 760px);
-
-  padding: clamp(1.5rem, 4vw, 3rem);
+  /* Shrink the panel on short screens while keeping a comfortable max size. */
+  height: min(760px, 100%);
+  min-height: 0;
+  padding: clamp(1rem, 3vh, 2.5rem) clamp(1rem, 4vw, 3rem);
 
   border: 2px solid var(--gold-5);
-
   background: linear-gradient(
     145deg,
     var(--blue-2),
@@ -42,57 +52,62 @@
   animation: cardReveal var(--transition-1) both;
 }
 
+/* Header area stays at its natural height above the payment grid. */
 .payment-header {
+  flex: 0 0 auto;
   width: 100%;
   text-align: center;
 }
 
+/* Small store label above the main heading. */
 .payment-eyebrow {
   display: block;
-
-  margin-bottom: 0.8rem;
-
+  margin-bottom: 0.6rem;
   color: var(--gold-6);
-
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.16em;
 }
 
+/* Main page heading. clamp() scales the text smoothly with screen width. */
 .payment-header h1 {
   margin: 0;
-
   color: var(--gold-7);
-
-  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-size: clamp(1.25rem, 3vw, 2rem);
   font-weight: 800;
   letter-spacing: 0.06em;
 }
 
+/* Short instruction beneath the heading. */
 .payment-header p {
-  margin: 0.8rem 0 0;
-
+  margin: 0.55rem 0 0;
   color: var(--blue-8);
-
-  font-size: 0.85rem;
+  font-size: clamp(0.75rem, 1.5vw, 0.85rem);
 }
 
+/* Horizontal decorative separator between the heading and button grid. */
 .payment-divider {
+  flex: 0 0 auto;
   width: 100%;
-  margin: 1.5rem 0;
-
+  margin: clamp(0.65rem, 2vh, 1.25rem) 0;
   border-top: 1px solid var(--gold-4);
 }
 
+/*
+ * Two-column, two-row grid. It can use the remaining card height, so the
+ * payment tiles become shorter on short displays instead of forcing scrolling.
+ */
 .payment-grid {
   display: grid;
-
   grid-template-columns: repeat(2, minmax(0, 1fr));
-
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  gap: 1.2rem;
+  gap: clamp(0.5rem, 1.5vw, 1.2rem);
 }
 
+/* Individual payment method button. Its height follows the available grid row. */
 .payment-option {
   display: flex;
   flex-direction: column;
@@ -100,22 +115,15 @@
   align-items: center;
 
   width: 100%;
+  height: 100%;
   min-width: 0;
-  aspect-ratio: 1 / 1;
-
-  gap: 1.1rem;
-  padding: 1.25rem;
+  min-height: 0;
+  gap: clamp(0.4rem, 1.5vh, 1.1rem);
+  padding: clamp(0.5rem, 2vh, 1.25rem);
 
   border: 2px solid var(--gold-4);
-
-  background: linear-gradient(
-    145deg,
-    var(--blue-3),
-    var(--blue-1)
-  );
-
+  background: linear-gradient(145deg, var(--blue-3), var(--blue-1));
   color: var(--gold-7);
-
   cursor: pointer;
 
   transition:
@@ -125,115 +133,91 @@
     transform var(--transition-2);
 }
 
+/* Highlight a payment choice when the pointer is over an enabled button. */
 .payment-option:hover:not(:disabled) {
   border-color: var(--gold-7);
-
-  background: linear-gradient(
-    145deg,
-    var(--blue-5),
-    var(--blue-2)
-  );
-
+  background: linear-gradient(145deg, var(--blue-5), var(--blue-2));
   box-shadow:
     0 0 18px rgba(208, 173, 68, 0.15),
     inset 0 0 15px rgba(208, 173, 68, 0.05);
-
   transform: translateY(-3px);
 }
 
+/* Slight press effect when the user clicks an enabled payment choice. */
 .payment-option:active:not(:disabled) {
   transform: scale(0.98);
 }
 
+/* Visible keyboard focus indicator for accessibility. */
 .payment-option:focus-visible {
   outline: 2px solid var(--gold-7);
   outline-offset: 4px;
 }
 
+/* Dim unavailable buttons and show that they cannot currently be clicked. */
 .payment-option:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
+/* Wrapper centers the SVG inside its payment button. */
 .payment-icon {
   display: flex;
   justify-content: center;
   align-items: center;
-
   color: var(--gold-7);
 }
 
+/* Keep icons responsive instead of forcing their original 64px dimensions. */
 .payment-icon svg {
-  width: clamp(2.8rem, 6vw, 4rem);
-  height: clamp(2.8rem, 6vw, 4rem);
+  width: clamp(2rem, 6vh, 4rem);
+  height: clamp(2rem, 6vh, 4rem);
 }
 
+/* Text label under each payment icon. */
 .payment-label {
   color: var(--blue-9);
-
-  font-size: clamp(0.85rem, 2vw, 1.1rem);
+  font-size: clamp(0.75rem, 1.8vw, 1.1rem);
   font-weight: 800;
-
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
+/* Informational status shown while a transaction is being processed. */
 .payment-message {
-  margin: 1rem 0 0;
-
+  flex: 0 0 auto;
+  margin: 0.5rem 0 0;
   color: var(--gold-7);
   font-size: 0.8rem;
   font-weight: 700;
 }
 
+/* Error message shown for missing sessions or unsuccessful API requests. */
 .payment-error {
-  margin: 1rem 0 0;
-  padding: 0.7rem 1rem;
-
+  flex: 0 0 auto;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.8rem;
   width: 100%;
-
   border: 1px solid #a94442;
   background: rgba(169, 68, 66, 0.12);
-
   color: #e9a5a5;
   font-size: 0.8rem;
   text-align: center;
 }
 
-.payment-footer {
-  width: 100%;
-
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-
-  border-top: 1px solid var(--gold-4);
-
-  color: var(--blue-7);
-
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-
-  text-align: center;
-}
-
+/* Cancel button is fixed relative to the viewport, not the payment card. */
 .payment-cancel {
   position: fixed;
   z-index: 10;
-
-  bottom: 1.5rem;
+  bottom: 1rem;
   left: 1.5rem;
 
-  padding: 0.7rem 1.5rem;
-
+  padding: 0.65rem 1.3rem;
   border: 1px solid var(--gold-5);
-
   background: var(--blue-2);
   color: var(--gold-7);
-
   font-size: 0.85rem;
   font-weight: 800;
-
   cursor: pointer;
 
   transition:
@@ -242,75 +226,119 @@
     color var(--transition-2);
 }
 
+/* Hover styling for the Cancel button. */
 .payment-cancel:hover:not(:disabled) {
   border-color: var(--gold-7);
   background: var(--blue-4);
   color: var(--gold-8);
 }
 
+/* Prevent repeated navigation while checkout is processing. */
 .payment-cancel:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* Keyboard focus indicator for the Cancel button. */
 .payment-cancel:focus-visible {
   outline: 2px solid var(--gold-7);
   outline-offset: 3px;
 }
 
+/* Narrow screens: reduce outer spacing and button gaps to preserve usable room. */
 @media (max-width: 600px) {
   .payment-page {
-    padding: 1.5rem 1rem 5rem;
+    padding: 0.6rem 0.6rem 3.8rem;
   }
 
   .payment-card {
-    padding: 1.2rem;
+    width: 100%;
+    padding: 0.9rem;
   }
 
   .payment-grid {
-    gap: 0.7rem;
+    gap: 0.55rem;
   }
 
   .payment-option {
-    gap: 0.7rem;
-    padding: 0.7rem;
+    gap: 0.45rem;
+    padding: 0.5rem;
   }
 
   .payment-label {
-    font-size: 0.8rem;
+    font-size: clamp(0.7rem, 3vw, 0.85rem);
   }
 
   .payment-cancel {
-    bottom: 0.8rem;
-    left: 0.8rem;
+    bottom: 0.55rem;
+    left: 0.6rem;
   }
 }
 
-@media (max-height: 650px) and (min-width: 601px) {
+/*
+ * Short/wide screens (such as landscape tablets or small laptop windows):
+ * reduce the header and spacing so all four choices remain visible.
+ */
+@media (max-height: 650px) {
   .payment-page {
-    padding: 1rem;
+    padding-top: 0.4rem;
+    padding-bottom: 3.5rem;
   }
 
   .payment-card {
-    width: min(100%, 650px);
-    padding: 1rem 2rem;
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+  }
+
+  .payment-eyebrow {
+    margin-bottom: 0.25rem;
+    font-size: 0.6rem;
+  }
+
+  .payment-header h1 {
+    font-size: clamp(1rem, 3.2vh, 1.5rem);
+  }
+
+  .payment-header p {
+    margin-top: 0.25rem;
+    font-size: 0.72rem;
   }
 
   .payment-divider {
-    margin: 0.8rem 0;
-  }
-
-  .payment-grid {
-    gap: 0.8rem;
+    margin: 0.5rem 0;
   }
 
   .payment-option {
-    aspect-ratio: 1.2 / 1;
-    gap: 0.5rem;
+    gap: 0.3rem;
+    padding: 0.35rem;
   }
 
   .payment-icon svg {
-    width: 2.8rem;
-    height: 2.8rem;
+    width: clamp(1.7rem, 5vh, 2.8rem);
+    height: clamp(1.7rem, 5vh, 2.8rem);
+  }
+}
+
+/* Extra-small or very short screens: make the Cancel control more compact. */
+@media (max-width: 360px), (max-height: 450px) {
+  .payment-page {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+    padding-bottom: 3.1rem;
+  }
+
+  .payment-card {
+    padding: 0.5rem;
+  }
+
+  .payment-grid {
+    gap: 0.35rem;
+  }
+
+  .payment-cancel {
+    bottom: 0.35rem;
+    left: 0.35rem;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.75rem;
   }
 }
