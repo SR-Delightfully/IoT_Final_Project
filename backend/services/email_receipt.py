@@ -34,7 +34,17 @@ def send_receipt_email(customer_email, receipt):
     message["To"] = customer_email
     message.set_content("\n".join(lines))
 
+    print("[Receipt email] Connecting to Gmail...")
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as smtp:
+        print("[Receipt email] Starting secure connection...")
         smtp.starttls()
+
+        print("[Receipt email] Logging in...")
         smtp.login(our_email, app_password)
+
+        print("[Receipt email] Sending message...")
         smtp.send_message(message)
+
+        print("[Receipt email] Gmail accepted the message.")
+
+    print("[Receipt email] Connection closed normally.")
