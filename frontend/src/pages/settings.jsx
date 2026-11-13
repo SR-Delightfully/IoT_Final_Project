@@ -21,15 +21,25 @@ function request(path, method = "GET", body) {
   });
 }
 
-const EMPTY_PASSWORDS = { current_password: "", new_password: "", confirm_password: "" };
+const EMPTY_PASSWORDS = {
+  current_password: "",
+  new_password: "",
+  confirm_password: "",
+};
 
 function Settings() {
   const loggedIn = Boolean(localStorage.getItem("user_id"));
   const [me, setMe] = useState(null);
   const [profile, setProfile] = useState(null);
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS);
-  const [profileStatus, setProfileStatus] = useState({ error: "", success: "" });
-  const [passwordStatus, setPasswordStatus] = useState({ error: "", success: "" });
+  const [profileStatus, setProfileStatus] = useState({
+    error: "",
+    success: "",
+  });
+  const [passwordStatus, setPasswordStatus] = useState({
+    error: "",
+    success: "",
+  });
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
@@ -64,7 +74,10 @@ function Settings() {
     e.preventDefault();
 
     if (passwords.new_password.length < 8) {
-      setPasswordStatus({ error: "New password must be at least 8 characters.", success: "" });
+      setPasswordStatus({
+        error: "New password must be at least 8 characters.",
+        success: "",
+      });
       return;
     }
     if (passwords.new_password !== passwords.confirm_password) {
@@ -84,8 +97,10 @@ function Settings() {
     }
   };
 
-  const updateProfile = (e) => setProfile({ ...profile, [e.target.name]: e.target.value });
-  const updatePasswords = (e) => setPasswords({ ...passwords, [e.target.name]: e.target.value });
+  const updateProfile = (e) =>
+    setProfile({ ...profile, [e.target.name]: e.target.value });
+  const updatePasswords = (e) =>
+    setPasswords({ ...passwords, [e.target.name]: e.target.value });
 
   if (!loggedIn || loadError) {
     return (
@@ -127,28 +142,53 @@ function Settings() {
           <section className="account-section">
             <h2 className="account-section-title">Your Details</h2>
 
-            {profileStatus.error && <p className="dashboard-error">{profileStatus.error}</p>}
-            {profileStatus.success && <p className="dashboard-success">{profileStatus.success}</p>}
+            {profileStatus.error && (
+              <p className="dashboard-error">{profileStatus.error}</p>
+            )}
+            {profileStatus.success && (
+              <p className="dashboard-success">{profileStatus.success}</p>
+            )}
 
             <form className="settings-form" onSubmit={saveProfile}>
               <label>
                 <span className="form-label">First name</span>
-                <input name="first_name" value={profile.first_name} onChange={updateProfile} required />
+                <input
+                  name="first_name"
+                  value={profile.first_name}
+                  onChange={updateProfile}
+                  required
+                />
               </label>
               <label>
                 <span className="form-label">Last name</span>
-                <input name="last_name" value={profile.last_name} onChange={updateProfile} required />
+                <input
+                  name="last_name"
+                  value={profile.last_name}
+                  onChange={updateProfile}
+                  required
+                />
               </label>
 
               {me.is_customer && (
                 <>
                   <label>
                     <span className="form-label">Phone</span>
-                    <input name="phone" type="tel" value={profile.phone} onChange={updateProfile} required />
+                    <input
+                      name="phone"
+                      type="tel"
+                      value={profile.phone}
+                      onChange={updateProfile}
+                      required
+                    />
                   </label>
                   <label className="settings-full">
                     <span className="form-label">Address</span>
-                    <input name="address" value={profile.address} onChange={updateProfile} required />
+                    <input
+                      name="address"
+                      value={profile.address}
+                      onChange={updateProfile}
+                      required
+                    />
                   </label>
                 </>
               )}
@@ -162,8 +202,12 @@ function Settings() {
           <section className="account-section">
             <h2 className="account-section-title">Change Password</h2>
 
-            {passwordStatus.error && <p className="dashboard-error">{passwordStatus.error}</p>}
-            {passwordStatus.success && <p className="dashboard-success">{passwordStatus.success}</p>}
+            {passwordStatus.error && (
+              <p className="dashboard-error">{passwordStatus.error}</p>
+            )}
+            {passwordStatus.success && (
+              <p className="dashboard-success">{passwordStatus.success}</p>
+            )}
 
             <form className="settings-form" onSubmit={savePassword}>
               <label className="settings-full">

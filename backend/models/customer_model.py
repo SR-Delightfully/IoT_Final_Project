@@ -226,3 +226,60 @@ def delete_customer(customer_id):
             (customer_id,)
         )
         return cursor.rowcount > 0
+
+
+def update_customer_profile(customer_id, first_name, last_name, address, phone):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE Users
+            SET user_fname = ?,
+                user_lname = ?
+            WHERE user_id = ?
+              AND user_id IN (SELECT customer_id FROM Customers)
+            """,
+            (first_name.strip(), last_name.strip(), customer_id)
+        )
+
+        if cursor.rowcount == 0:
+            return False
+
+        conn.execute(
+            """
+            UPDATE Customers
+            SET customer_address = ?,
+                customer_phone = ?
+            WHERE customer_id = ?
+            """,
+            (address.strip(), phone.strip() or None, customer_id)
+        )
+
+        return True
+
+
+def change_customer_password(customer_id, current_password, new_password):
+    from models.user_model import verify_password
+
+    with get_connection() as conn:
+        user = conn.execute(
+            """
+            SELECT u.user_password_hash
+            FROM Users u
+            JOIN Customers c ON c.customer_id = u.user_id
+            WHERE u.user_id = ?
+            """,
+            (customer_id,)
+        ).fetchone()
+
+        if user is None:
+            return "not_found"
+
+        if not verify_password(current_password, user["user_password_hash"]):
+            return "wrong_password"
+
+        conn.execute(
+            "UPDATE Users SET user_password_hash = ? WHERE user_id = ?",
+            (hash_password(new_password), customer_id)
+        )
+
+        return "ok"

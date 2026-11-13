@@ -14,7 +14,7 @@ from breadboardCode import login
 #retrieve alerts for the dashboard
 from models.alert_model import get_all_alerts
 from models.notification_model import get_user_notifications
-from models.customer_model import get_customer
+from models.customer_model import get_customer, update_customer_profile, change_customer_password
 from models.purchase_model import get_customer_points, get_customer_purchases
 from models.user_model import (
     get_user,
@@ -342,6 +342,73 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, {"message": "Threshold updated"})
         else:
             self.send_json(404, {"error": "Fridge not found"})
+    # Update a customer's profile or password from the settings page
+    def update_customer_settings(self, customer_id, setting):
+        if not customer_id.isdigit():
+            self.send_json(400, {"error": "Invalid customer ID"})
+            return
+
+        customer_id = int(customer_id)
+
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(length))
+        except ValueError:
+            self.send_json(400, {"error": "Invalid JSON"})
+            return
+
+        if not isinstance(data, dict):
+            self.send_json(400, {"error": "Request body must be a JSON object"})
+            return
+
+        if setting == "profile":
+            for field in ("first_name", "last_name", "address"):
+                value = data.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                    return
+
+            phone = data.get("phone") or ""
+            if not isinstance(phone, str):
+                self.send_json(400, {"error": "Invalid phone"})
+                return
+
+            if update_customer_profile(
+                customer_id,
+                data["first_name"],
+                data["last_name"],
+                data["address"],
+                phone
+            ):
+                self.send_json(200, {"message": "Profile updated"})
+            else:
+                self.send_json(404, {"error": "Customer not found"})
+            return
+
+        current = data.get("current_password")
+        new = data.get("new_password")
+
+        if not isinstance(current, str) or not current:
+            self.send_json(400, {"error": "Enter your current password"})
+            return
+
+        if not isinstance(new, str) or len(new) < 8:
+            self.send_json(400, {"error": "New password must be at least 8 characters"})
+            return
+
+        if new != data.get("confirm_password"):
+            self.send_json(400, {"error": "New passwords do not match"})
+            return
+
+        result = change_customer_password(customer_id, current, new)
+
+        if result == "ok":
+            self.send_json(200, {"message": "Password updated"})
+        elif result == "wrong_password":
+            self.send_json(403, {"error": "Current password is incorrect"})
+        else:
+            self.send_json(404, {"error": "Customer not found"})
+
     def do_POST(self):
         if self.path == "/register":
             self.register_customer()
