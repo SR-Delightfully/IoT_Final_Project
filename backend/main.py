@@ -4,7 +4,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from models.database import init_db, DB_FILE
 from models.checkout_models.model_products import get_all_products, update_product, add_product_with_barcode, update_product_with_barcode
 from models.checkout_models.model_purchases import get_customer_purchases # purchase history.
-from models.client_models.model_users import authenticate_user
+from models.client_models.model_users import authenticate_user, get_user
 from services.self_checkout import SelfCheckout
 from services.rfid_reader import RFIDReader
 from models.management_models.model_fridges import get_all_fridges, update_fridge
@@ -14,6 +14,7 @@ from models.management_models.model_notifications import get_user_notifications
 from models.client_models.model_customers import add_customer, get_customer,get_customer_by_user_id
 from models.management_models.model_stock_receipts import add_stock_receipt
 from models.client_models.model_receipts import get_customer_receipt
+from services.email_receipt import send_receipt_email
 
 from services.breadboardCode import login
 import json
@@ -78,6 +79,21 @@ class Server(BaseHTTPRequestHandler):
             return None
 
         return SESSIONS.get(parts[1])
+        # Allow product and stock changes only for logged-in administrators.
+    def require_admin(self):
+        user_id = self.get_logged_in_user_id()
+
+        if user_id is None:
+            self.send_json(401, {"error": "Please log in"})
+            return False
+
+        user = get_user(user_id)
+
+        if user is None or user["user_role"] != "admin":
+            self.send_json(403, {"error": "Administrator access required"})
+            return False
+
+        return True
 
     def do_GET(self):
         path = self.path.split("?")[0].rstrip("/")
@@ -273,6 +289,8 @@ class Server(BaseHTTPRequestHandler):
 
         parts = self.path.strip("/").split("/")
         if len(parts) == 2 and parts[0] == "products":
+            if not self.require_admin():
+                return
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid product ID"})
                 return
@@ -490,9 +508,24 @@ class Server(BaseHTTPRequestHandler):
                     payment_method=payment_method
                 )
 
+                #After purchase it sends an email using customer token
                 if not receipt:
                     self.send_json(400, {"error": "Could not complete this purchase"})
                 else:
+                    receipt["email_status"] = "not_applicable"
+
+                    # Email registered customers after the purchase is saved.
+                    if customer_id is not None:
+                        try:
+                            send_receipt_email(
+                                customer["user_email"],
+                                receipt
+                            )
+                            receipt["email_status"] = "sent"
+                        except Exception as error:
+                            print(f"Receipt email error: {error}")
+                            receipt["email_status"] = "failed"
+
                     self.send_json(201, receipt)
 
             except (ValueError, json.JSONDecodeError) as error:
@@ -574,6 +607,8 @@ class Server(BaseHTTPRequestHandler):
         )
 #Reads the given ProductID, positive quantity. Returns new receptionID
     def receive_stock(self):
+        if not self.require_admin():
+            return
         try:
             content_len = int(self.headers.get("Content-Length", 0))
 
@@ -690,6 +725,8 @@ class Server(BaseHTTPRequestHandler):
     #Read request, check given information, check price in cents, save product and send json result
 
     def create_product(self):
+        if not self.require_admin():
+            return
         try:
             content_len = int(self.headers.get("Content-Length", 0))
 
@@ -811,6 +848,8 @@ class Server(BaseHTTPRequestHandler):
         parts = self.path.strip("/").split("/")
                 # Hide the product without deleting its database record.
         if len(parts) == 2 and parts[0] == "products":
+            if not self.require_admin():
+                return
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid product ID"})
                 return

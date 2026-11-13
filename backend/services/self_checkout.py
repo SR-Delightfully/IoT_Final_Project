@@ -238,6 +238,7 @@ class SelfCheckout:
         placeholders = ", ".join(["?"] * len(unique_epcs))
 
         with get_connection() as conn:
+                        # Find active products whose scanned tags have not already been sold.
             rows = conn.execute(
                 f"""
                 SELECT
@@ -257,6 +258,12 @@ class SelfCheckout:
                     ON c.category_id = p.category_id
                 WHERE UPPER(pt.product_tag_epc) IN ({placeholders})
                     AND pt.product_tag_status = 'ACTIVE'
+                    
+                     AND NOT EXISTS (
+                        SELECT 1
+                        FROM ProductTagSales pts
+                        WHERE pts.product_tag_id = pt.product_tag_id
+                    )
                     AND p.product_is_active = 1
                     AND p.product_stock_quantity > 0
                 """,
@@ -334,7 +341,13 @@ class SelfCheckout:
         }
 
     def process_rfid(self, epc, rssi=None):
+
         if self.active_session_id is None:
+            return None
+        # Count each physical RFID tag only once in this cart.
+        epc = epc.strip().upper()
+
+        if epc in self.session_tags.get(self.active_session_id, []):
             return None
 
         result = self.scan_products([epc])
@@ -589,6 +602,8 @@ class SelfCheckout:
             receipt_data = dict(receipt)
 
             receipt_data.update({
+                # Include the points awarded for this purchase in the receipt.
+                "points_earned": points_earned,
                 "purchase_id": purchase_id,
                 "items": [
                     {
