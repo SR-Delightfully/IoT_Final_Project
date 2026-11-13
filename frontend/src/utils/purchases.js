@@ -1,10 +1,10 @@
-// no login session yet, so use the saved customer id or the sample customer
-export function getCustomerId() {
-  return localStorage.getItem("customer_id") || 1;
-}
+import { authHeaders } from "./auth";
 
+const API = import.meta.env.VITE_API_URL;
+
+// account info, points and purchase history for whoever is logged in
 export async function fetchAccount() {
-  const res = await fetch(`http://localhost:5050/customers/${getCustomerId()}/account`);
+  const res = await fetch(`${API}/me/account`, { headers: authHeaders() });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not load account");
   return data;

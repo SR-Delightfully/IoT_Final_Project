@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authHeaders, SESSION_KEYS } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -23,7 +24,7 @@ function NavBar() {
     const saved = readUser();
     if (!saved) return;
 
-    fetch(`${API}/me`, { headers: { "X-User-Id": saved.user_id } })
+    fetch(`${API}/me`, { headers: authHeaders() })
       .then(async (res) => {
         if (res.status === 401) {
           logOut();
@@ -40,7 +41,7 @@ function NavBar() {
   }, []);
 
   function logOut() {
-    ["user_id", "user_role", "user_fname", "customer_id"].forEach((key) =>
+    SESSION_KEYS.forEach((key) =>
       localStorage.removeItem(key),
     );
     setUser(null);

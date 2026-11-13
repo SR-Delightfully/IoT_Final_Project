@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { authHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -20,16 +21,12 @@ function toCents(dollars) {
   return Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : NaN;
 }
 
-function getUserId() {
-  return localStorage.getItem("user_id") || localStorage.getItem("customer_id");
-}
-
 async function adminRequest(path, method = "GET", body) {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": getUserId() || "",
+      ...authHeaders(),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -47,7 +44,7 @@ function productToForm(p) {
   return {
     name: p.product_name,
     category: p.product_category,
-    price: (p.product_price / 100).toFixed(2),
+    price: (p.product_price_cents / 100).toFixed(2),
     upc: p.product_upc,
     producer: p.product_producer_company,
     image_url: p.product_image_url || "",
@@ -124,7 +121,7 @@ function ProductForm({ form, onChange, onSubmit, submitLabel, onCancel }) {
 
 function ProductDashboard() {
   const [products, setProducts] = useState(null);
-  const [denied, setDenied] = useState(!getUserId());
+  const [denied, setDenied] = useState(!localStorage.getItem("token"));
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [newProduct, setNewProduct] = useState(EMPTY_FORM);
@@ -151,7 +148,7 @@ function ProductDashboard() {
   }, []);
 
   useEffect(() => {
-    if (getUserId()) loadProducts();
+    if (localStorage.getItem("token")) loadProducts();
   }, [loadProducts]);
 
   const replaceProduct = (updated) =>
@@ -335,7 +332,7 @@ function ProductDashboard() {
                               <div className="dashboard-subtext">{p.product_upc}</div>
                             </td>
                             <td>{p.product_category}</td>
-                            <td>{formatPrice(p.product_price)}</td>
+                            <td>{formatPrice(p.product_price_cents)}</td>
                             <td className={p.quantity_in_stock <= 0 ? "product-stock-out" : ""}>
                               {p.quantity_in_stock}
                             </td>

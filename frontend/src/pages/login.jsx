@@ -52,6 +52,7 @@ try {
 
   // remember who is logged in (the account page and admin dashboard read these)
   const user = data.user;
+  localStorage.setItem("token", data.token);
   localStorage.setItem("user_id", user.user_id);
   localStorage.setItem("user_role", user.user_role);
   localStorage.setItem("user_fname", user.user_fname || "");

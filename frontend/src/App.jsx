@@ -16,6 +16,7 @@ import Account from "./pages/account";
 import Home from "./pages/home";
 import Login from "./pages/login";
 import ProductDashboard from "./pages/productDashboard";
+import Purchases from "./pages/purchases";
 import Products from "./pages/products";
 import Registration from "./pages/registration";
 import Settings from "./pages/settings";
@@ -52,14 +53,9 @@ function App() {
           element={<p>{/* TODO: product crud dashboard */}</p>}
         />
 
-        <Route
-          path="/account"
-          element={<p>{/* TODO: user profile and settings? */}</p>}
-        />
-        <Route
-          path="/account/purchase-history"
-          element={<p>{/* TODO: transaction history */}</p>}
-        />
+        <Route path="/account" element={<Account />} />
+        <Route path="/account/purchases" element={<Purchases />} />
+        <Route path="/account/purchase-history" element={<Purchases />} />
         <Route
           path="/account/membership"
           element={
@@ -80,7 +76,6 @@ function App() {
         />
 
         <Route path="/testing" element={<Testing />} />
-        <Route path="/account" element={<Account />} />
         <Route path="/products" element={<Products />} />
         <Route path="/admin/products" element={<ProductDashboard />} />
         <Route path="/admin/users" element={<UserRoles />} />

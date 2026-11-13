@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { authHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -7,7 +8,7 @@ function request(path, method = "GET", body) {
     method,
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": localStorage.getItem("user_id") || "",
+      ...authHeaders(),
     },
     body: body ? JSON.stringify(body) : undefined,
   }).then(async (res) => {

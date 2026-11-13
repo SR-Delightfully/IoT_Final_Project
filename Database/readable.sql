@@ -32,8 +32,6 @@ CREATE TABLE IF NOT EXISTS Rewards (
     reward_image_url TEXT,
     reward_points_cost INTEGER NOT NULL
         CHECK (reward_points_cost > 0),
-    customer_loyalty_points INTEGER NOT NULL DEFAULT 0
-        CHECK (customer_loyalty_points >= 0),
     reward_is_active INTEGER NOT NULL DEFAULT 1
         CHECK (reward_is_active IN (0, 1)),
     reward_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -588,97 +586,3 @@ GROUP BY
 
 
 COMMIT;
-CREATE INDEX IF NOT EXISTS idx_product_tags_product_sale
-ON ProductTags(product_id, purchase_item_id);
-
-
-INSERT OR IGNORE INTO Users (
-    user_role, user_fname, user_lname, user_email, user_password_hash
-)
-VALUES ('customer', 'Alex', 'Martin', 'alex.martin@example.com', '12934ednde23230');
-
-INSERT OR IGNORE INTO Customers (
-    customer_id, customer_code, customer_address, customer_phone, customer_loyalty_points
-)
-SELECT user_id, 'MEM' || printf('%08d', user_id), '123 Acadie Street', '1234321230', 0
-FROM Users
-WHERE user_email = 'alex.martin@example.com';
-
-
-INSERT OR IGNORE INTO Products (
-    product_id, product_name, product_category, product_price, product_upc, product_producer_company
-)
-VALUES
-    (1, 'Pikachu', 'Rare Card', 250, '0123456789012', 'Pikachu Inc.'),
-    (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
-
-
--- Fixed ids + OR IGNORE so restarting the server doesn't add the stock again.
-INSERT OR IGNORE INTO StockReceptions (
-    reception_id, product_id, reception_quantity_received, reception_note
-)
-VALUES
-    (1, 1, 7, 'Initial Pikachu stock'),
-    (2, 2, 3, 'Initial bulbasaur stock');
-
-
-INSERT OR IGNORE INTO ProductTags (
-    product_id, product_tag_epc
-)
-VALUES
-    (1, 'PIKACHU-001'),
-    (1, 'PIKACHU-002'),
-    (1, 'PIKACHU-003'),
-    (1, 'PIKACHU-004'),
-    (1, 'PIKACHU-005'),
-    (1, 'PIKACHU-006'),
-    (1, 'PIKACHU-007'),
-    (2, 'BULBASAUR-001'),
-    (2, 'BULBASAUR-002'),
-    (2, 'BULBASAUR-003');
-
-
--- Sample purchases for Alex (1 point per whole dollar on paid purchases)
-INSERT OR IGNORE INTO Purchases (
-    purchase_id, customer_id, purchase_total, purchase_points_earned,
-    purchase_payment_status, purchase_created_at
-)
-SELECT seed.purchase_id, u.user_id, seed.total, seed.points, seed.status, seed.created_at
-FROM (
-    SELECT 1 AS purchase_id, 500 AS total, 5 AS points, 'paid' AS status, '2026-09-05 14:12:00' AS created_at
-    UNION ALL SELECT 2, 300, 3, 'paid', '2026-09-18 10:45:00'
-    UNION ALL SELECT 3, 550, 5, 'paid', '2026-10-02 16:30:00'
-    UNION ALL SELECT 4, 250, 2, 'paid', '2026-10-15 12:05:00'
-    UNION ALL SELECT 5, 550, 5, 'paid', '2026-10-29 18:20:00'
-    UNION ALL SELECT 6, 250, 0, 'pending', '2026-11-08 09:40:00'
-) AS seed
-JOIN Users AS u ON u.user_email = 'alex.martin@example.com';
-
-INSERT OR IGNORE INTO PurchaseItems (
-    purchase_item_id, purchase_id, product_id,
-    purchase_item_name, purchase_item_quantity, purchase_item_unit_price
-)
-SELECT seed.*
-FROM (
-    SELECT 1 AS purchase_item_id, 1 AS purchase_id, 1 AS product_id, 'Pikachu' AS name, 2 AS quantity, 250 AS unit_price
-    UNION ALL SELECT 2, 2, 2, 'Bulbasaur', 1, 300
-    UNION ALL SELECT 3, 3, 1, 'Pikachu', 1, 250
-    UNION ALL SELECT 4, 3, 2, 'Bulbasaur', 1, 300
-    UNION ALL SELECT 5, 4, 1, 'Pikachu', 1, 250
-    UNION ALL SELECT 6, 5, 2, 'Bulbasaur', 1, 300
-    UNION ALL SELECT 7, 5, 1, 'Pikachu', 1, 250
-    UNION ALL SELECT 8, 6, 1, 'Pikachu', 1, 250
-) AS seed
-JOIN Purchases AS pu ON pu.purchase_id = seed.purchase_id
-JOIN Users AS u ON u.user_id = pu.customer_id AND u.user_email = 'alex.martin@example.com';
-
--- Give Alex the points from the sample purchases, only if Alex has none yet
-UPDATE Customers
-SET customer_loyalty_points = (
-    SELECT COALESCE(SUM(purchase_points_earned), 0)
-    FROM Purchases
-    WHERE customer_id = Customers.customer_id
-      AND purchase_payment_status = 'paid'
-)
-WHERE customer_loyalty_points = 0
-  AND customer_id = (SELECT user_id FROM Users WHERE user_email = 'alex.martin@example.com');

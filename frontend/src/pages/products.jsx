@@ -49,8 +49,8 @@ function Products() {
 
   const SORTS = {
     name: (a, b) => a.product_name.localeCompare(b.product_name),
-    "price-asc": (a, b) => a.product_price - b.product_price,
-    "price-desc": (a, b) => b.product_price - a.product_price,
+    "price-asc": (a, b) => a.product_price_cents - b.product_price_cents,
+    "price-desc": (a, b) => b.product_price_cents - a.product_price_cents,
     stock: (a, b) => b.quantity_in_stock - a.quantity_in_stock,
   };
   visible.sort(SORTS[sort]);
@@ -141,7 +141,7 @@ function Products() {
                         <span className="product-producer">{p.product_producer_company}</span>
 
                         <div className="product-footer">
-                          <span className="product-price">{formatPrice(p.product_price)}</span>
+                          <span className="product-price">{formatPrice(p.product_price_cents)}</span>
                           <span
                             className={`product-stock ${inStock ? "" : "product-stock-out"}`}
                           >
@@ -195,7 +195,7 @@ function Products() {
               <h2 className="product-name">{selected.product_name}</h2>
               <span className="product-category">{selected.product_category}</span>
               <span className="product-price product-modal-price">
-                {formatPrice(selected.product_price)}
+                {formatPrice(selected.product_price_cents)}
               </span>
 
               <dl className="product-modal-details">

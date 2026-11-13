@@ -3,7 +3,8 @@ import hashlib
 import hmac
 import os
 
-from models.customer_model import get_connection, hash_password
+from models.database import get_connection
+from models.client_models.model_customers import hash_password
 
 
 def verify_password(password, password_hash):
