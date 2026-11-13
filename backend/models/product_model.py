@@ -12,6 +12,7 @@ PRODUCT_QUERY = """
         p.product_description,
         p.category_id,
         c.category_name AS product_category,
+        c.category_image_url,
         p.product_price_cents,
         ROUND(p.product_price_cents / 100.0, 2) AS product_price,
         b.barcode_value AS product_barcode,

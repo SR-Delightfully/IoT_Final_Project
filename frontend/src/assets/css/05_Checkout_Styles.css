@@ -38,7 +38,7 @@
 
 .self-checkout-page .header p {
   margin: 0.2rem 0 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.76rem;
 }
 
@@ -99,7 +99,7 @@
   flex-shrink: 0;
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--gold-4);
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.63rem;
   letter-spacing: 0.06em;
 }
@@ -135,7 +135,7 @@
 }
 
 .barcode-form small {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.65rem;
   line-height: 1.4;
 }
@@ -194,7 +194,7 @@
   flex-shrink: 0;
   border: 0;
   background: transparent;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 1.25rem;
   cursor: pointer;
 }
@@ -224,7 +224,7 @@
 }
 
 .catalog-heading > div > span {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.7rem;
 }
 
@@ -263,7 +263,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font: inherit;
   font-size: inherit;
   cursor: pointer;
@@ -315,7 +315,7 @@
 
 .category-intro p {
   margin: 0.25rem 0 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.75rem;
 }
 
@@ -462,7 +462,7 @@
 .category-card-label {
   display: block;
   margin-bottom: 0.2rem;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.52rem;
   letter-spacing: 0.1em;
 }
@@ -476,7 +476,7 @@
 
 .category-card-count {
   flex-shrink: 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.55rem;
   letter-spacing: 0.05em;
 }
@@ -531,7 +531,7 @@
 .product-results-heading > span {
   flex-shrink: 0;
   padding-bottom: 0.3rem;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.58rem;
   letter-spacing: 0.08em;
 }
@@ -651,8 +651,7 @@
   width: 100%;
   height: 100%;
   gap: 0.5rem;
-  padding: 0 0.2rem 0 0;
-  border: 2px inset var(--gold-4) !important;
+  padding: 0.2rem;
 }
 
 .product {
@@ -661,7 +660,7 @@
   flex-flow: column nowrap;
   max-width: 14rem;
   max-height: 20rem;
-  border: 3px double var(--gold-4);
+  border: 1px inset var(--gold-1);
   background: var(--tone-3);
   overflow: hidden;
   transition:
@@ -670,12 +669,22 @@
 }
 
 .product:hover {
-  border-color: var(--gold-6);
-  background: var(--blue-3);
+  border-color: var(--gold-7);
+  border-style: outset;
+  background: var(--tone-4);
+  box-shadow: 0rem 0rem 0.25rem var(--gold-6);
 }
 
+.product:hover .product-info {
+  border-color: var(--gold-7);
+}
 .product:hover .product-art > .product-image {
   transform: scale(0.67);
+}
+
+.product:hover .product-art::before {
+  /* filter: brightness(1.2) contrast(1.5); */
+  filter: none;
 }
 
 .product-art {
@@ -705,6 +714,15 @@
   content: "";
   pointer-events: none;
   opacity: 0.35;
+  background: radial-gradient(
+    transparent 0%,
+    var(--tone-5) 60%,
+    var(--blue-3) 95%,
+    var(--blue-1) 100%
+  );
+  filter: brightness(1.2) contrast(1.5);
+
+  z-index: 999;
 }
 
 .product-image {
@@ -716,7 +734,7 @@
 }
 
 .product-art > span:last-child:not(.in-cart) {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.55rem;
   letter-spacing: 0.1em;
   text-align: center;
@@ -747,6 +765,8 @@
   min-width: 0;
   gap: 0.3rem;
   padding: 0.5rem;
+  border-top: 1px solid var(--gold-5);
+  background: linear-gradient(180deg, var(--blue-2) 0%, transparent 50%);
 }
 
 .product-info h3 {
@@ -766,7 +786,7 @@
 .product-description {
   display: -webkit-box;
   margin: 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.67rem;
   line-height: 1.4;
   overflow: hidden;
@@ -776,7 +796,7 @@
 }
 
 .product-barcode {
-  color: var(--blue-8);
+  color: var(--tone-6);
   font-size: 0.58rem;
   letter-spacing: 0.04em;
   overflow-wrap: anywhere;
@@ -784,7 +804,7 @@
 
 .stock {
   margin-top: auto;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.65rem;
 }
 
@@ -823,7 +843,7 @@
 .empty p {
   max-width: 270px;
   margin: 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.78rem;
   line-height: 1.6;
 }
@@ -875,7 +895,7 @@
 }
 
 .session-status > span:last-child {
-  color: var(--blue-8);
+  color: var(--tone-8);
 }
 
 .cart-empty {
@@ -904,7 +924,7 @@
 .cart-empty p {
   max-width: 270px;
   margin: 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.78rem;
   line-height: 1.4;
 }
@@ -949,7 +969,7 @@
 .cart-item-main > div > span {
   display: block;
   margin-top: 0.35rem;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.7rem;
 }
 
@@ -980,7 +1000,7 @@
 }
 
 .total-breakdown > div > span:first-child {
-  color: var(--blue-8);
+  color: var(--tone-8);
 }
 
 .grand-total {
@@ -1003,7 +1023,7 @@
 
 .total-breakdown > p {
   margin: 0.05rem 0 0;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.6rem;
   line-height: 1.5;
 }
@@ -1073,13 +1093,21 @@
   font-size: 0.85rem;
 }
 
+.payment-options {
+  border: 2px solid hotpink;
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+  max-height: 54%;
+  gap: 1rem;
+}
 .payment-option {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   min-height: 2.5rem;
   gap: 0.55rem;
-  width: 100%;
+  max-width: 49% !important;
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--gold-4);
   background: transparent;
@@ -1118,7 +1146,7 @@
 }
 
 .payment-option small {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.62rem;
 }
 
@@ -1136,7 +1164,7 @@
   margin-top: 0.5rem;
   padding-top: 0.4rem;
   border-top: 1px solid var(--gold-4);
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.55rem;
   letter-spacing: 0.1em;
   text-align: center;
@@ -1173,7 +1201,7 @@
 }
 
 .muted {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.82rem;
   line-height: 1.6;
 }
@@ -1203,7 +1231,7 @@
 }
 
 .receipt-header span {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.7rem;
   overflow-wrap: anywhere;
 }
@@ -1228,7 +1256,7 @@
 }
 
 .receipt-item > div > span {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.7rem;
 }
 
@@ -1251,7 +1279,7 @@
 }
 
 .receipt-totals > div > span:first-child {
-  color: var(--blue-8);
+  color: var(--tone-8);
 }
 
 .receipt-totals .receipt-total {
@@ -1549,7 +1577,7 @@
   content: "SELECT CATEGORY";
   display: block;
   margin-top: 0.45rem;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.5rem;
   font-weight: 500;
   letter-spacing: 0.12em;
@@ -1662,7 +1690,7 @@
   padding: 0.2rem 0.55rem;
   border-color: var(--gold-4);
   background: transparent;
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.65rem;
 }
 
@@ -1681,7 +1709,7 @@
 }
 
 .catalog-navigation > span {
-  color: var(--blue-8);
+  color: var(--tone-8);
   font-size: 0.6rem;
   letter-spacing: 0.07em;
 }
