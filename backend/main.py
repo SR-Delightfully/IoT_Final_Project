@@ -44,7 +44,7 @@ from models.product_model import (
 )
 from services.self_checkout import SelfCheckout
 from services.rfid_reader import RFIDReader
-from services.email_receipt import send_receipt_email #lucas-test
+from services.email_receipt import send_receipt_email 
 from services.breadboardCode import login
 
 if sys.platform == "win32":
