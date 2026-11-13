@@ -16,6 +16,25 @@ from models.alert_model import get_all_alerts
 from models.notification_model import get_user_notifications
 from models.customer_model import get_customer
 from models.purchase_model import get_customer_points, get_customer_purchases
+from models.user_model import (
+    get_user,
+    get_all_users,
+    authenticate_user,
+    update_user_role,
+    update_user_name,
+    change_password
+)
+from models.customer_model import update_customer
+
+ROLES = ("customer", "admin")
+from models.product_model import (
+    get_active_products,
+    get_all_products,
+    get_product,
+    add_product,
+    update_product,
+    add_stock
+)
 import sys
 
 if sys.platform == "win32":
@@ -40,7 +59,7 @@ class Server(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-User-Id")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -49,10 +68,108 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-User-Id")
         self.end_headers()
-    
+
+    # The logged-in user, from the X-User-Id header the frontend sends
+    def current_user(self):
+        user_id = self.headers.get("X-User-Id", "")
+        user = get_user(int(user_id)) if user_id.isdigit() else None
+        return dict(user) if user else None
+
+    def require_user(self):
+        user = self.current_user()
+
+        if user is None:
+            self.send_json(401, {"error": "Please log in"})
+
+        return user
+
+    # Only users with the 'admin' role can use the /admin routes
+    def require_admin(self):
+        user = self.current_user()
+
+        if user is None or user["user_role"] != "admin":
+            self.send_json(403, {"error": "Admins only"})
+            return None
+
+        return user
+
+    def read_json(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(length)) if length > 0 else None
+        except ValueError:
+            data = None
+
+        if not isinstance(data, dict):
+            self.send_json(400, {"error": "Invalid JSON"})
+            return None
+
+        return data
+
+    def validate_product(self, data, partial=False):
+        text_fields = ["name", "category", "upc", "producer"]
+        product = {}
+
+        for field in text_fields:
+            if field not in data:
+                if not partial:
+                    return None, f"Missing field: {field}"
+                continue
+
+            value = data[field]
+            if not isinstance(value, str) or not value.strip():
+                return None, f"Invalid field: {field}"
+            product[field] = value.strip()
+
+        if "upc" in product and not (12 <= len(product["upc"]) <= 13):
+            return None, "UPC must be 12 or 13 characters"
+
+        if "price" in data or not partial:
+            price = data.get("price")
+            if type(price) is not int or price < 0:
+                return None, "Price must be a whole number of cents"
+            product["price"] = price
+
+        if "image_url" in data:
+            image_url = data["image_url"]
+            if image_url is not None and not isinstance(image_url, str):
+                return None, "Invalid field: image_url"
+            product["image_url"] = (image_url or "").strip() or None
+
+        if "active" in data:
+            if type(data["active"]) is not bool:
+                return None, "Invalid field: active"
+            product["active"] = 1 if data["active"] else 0
+
+        return product, None
+
     def do_GET(self):
+        # Public product catalogue (active products only)
+        if self.path.rstrip("/") == "/products":
+            self.send_json(200, get_active_products())
+            return
+
+        # Admin product dashboard (every product, with stock numbers)
+        if self.path.rstrip("/") == "/admin/products":
+            if self.require_admin():
+                self.send_json(200, get_all_products())
+            return
+
+        # The logged-in user's own details (used by the nav bar and settings page)
+        if self.path.rstrip("/") == "/me":
+            user = self.require_user()
+            if user:
+                self.send_json(200, self.user_details(user))
+            return
+
+        # Every user, for the admin roles page
+        if self.path.rstrip("/") == "/admin/users":
+            if self.require_admin():
+                self.send_json(200, [dict(u) for u in get_all_users()])
+            return
+
         # Get all fridge dashboard data
         if self.path == "/fridges/dashboard":
             dashboard = []
@@ -172,6 +289,25 @@ class Server(BaseHTTPRequestHandler):
     def do_PUT(self):
         parts = self.path.strip("/").split("/")
 
+        # Edit a product (admin only)
+        if len(parts) == 3 and parts[0] == "admin" and parts[1] == "products":
+            self.update_product_route(parts[2])
+            return
+
+        # Change another user's role (admin only)
+        if len(parts) == 4 and parts[:2] == ["admin", "users"] and parts[3] == "role":
+            self.update_role_route(parts[2])
+            return
+
+        # Update your own settings
+        if parts == ["me"]:
+            self.update_settings_route()
+            return
+
+        if parts == ["me", "password"]:
+            self.change_password_route()
+            return
+
         if len(parts) != 3 or parts[0] != "fridges" or parts[2] != "threshold":
             self.send_json(404, {"error": "Route not found"})
             return
@@ -211,7 +347,234 @@ class Server(BaseHTTPRequestHandler):
             self.register_customer()
             return
 
+        if self.path == "/login":
+            self.login_user()
+            return
+
+        parts = self.path.strip("/").split("/")
+
+        # Add a product (admin only)
+        if parts == ["admin", "products"]:
+            self.add_product_route()
+            return
+
+        # Receive stock for a product (admin only)
+        if len(parts) == 4 and parts[:2] == ["admin", "products"] and parts[3] == "stock":
+            self.add_stock_route(parts[2])
+            return
+
         self.send_json(404, {"error": "Route not found"})
+
+    def login_user(self):
+        data = self.read_json()
+        if data is None:
+            return
+
+        email = data.get("email")
+        password = data.get("password")
+
+        if not isinstance(email, str) or not email.strip() \
+                or not isinstance(password, str) or not password:
+            self.send_json(400, {"error": "Email and password are required"})
+            return
+
+        user = authenticate_user(email, password)
+
+        if user is None:
+            hardware_feedback(False)
+            self.send_json(401, {"error": "Incorrect email or password"})
+            return
+
+        hardware_feedback(True)
+        self.send_json(200, {"message": "Login successful", "user": user})
+
+    def user_details(self, user):
+        details = {
+            "user_id": user["user_id"],
+            "user_role": user["user_role"],
+            "user_fname": user["user_fname"],
+            "user_lname": user["user_lname"],
+            "user_email": user["user_email"],
+            "customer_phone": None,
+            "customer_address": None,
+            "is_customer": False,
+        }
+
+        customer = get_customer(user["user_id"])
+        if customer:
+            details["customer_phone"] = customer["customer_phone"]
+            details["customer_address"] = customer["customer_address"]
+            details["is_customer"] = True
+
+        return details
+
+    def update_settings_route(self):
+        user = self.require_user()
+        if not user:
+            return
+
+        data = self.read_json()
+        if data is None:
+            return
+
+        for field in ("first_name", "last_name"):
+            value = data.get(field)
+            if not isinstance(value, str) or not value.strip():
+                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                return
+
+        is_customer = get_customer(user["user_id"]) is not None
+
+        if is_customer:
+            for field in ("phone", "address"):
+                value = data.get(field)
+                if not isinstance(value, str) or not value.strip():
+                    self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                    return
+
+        update_user_name(user["user_id"], data["first_name"], data["last_name"])
+
+        if is_customer:
+            update_customer(
+                user["user_id"],
+                address=data["address"].strip(),
+                phone=data["phone"].strip()
+            )
+
+        self.send_json(200, self.user_details(get_user(user["user_id"])))
+
+    def change_password_route(self):
+        user = self.require_user()
+        if not user:
+            return
+
+        data = self.read_json()
+        if data is None:
+            return
+
+        current = data.get("current_password")
+        new = data.get("new_password")
+
+        if not isinstance(current, str) or not isinstance(new, str):
+            self.send_json(400, {"error": "Current and new password are required"})
+            return
+
+        if len(new) < 8:
+            self.send_json(400, {"error": "New password must be at least 8 characters"})
+            return
+
+        if not change_password(user["user_id"], current, new):
+            self.send_json(400, {"error": "Current password is incorrect"})
+            return
+
+        self.send_json(200, {"message": "Password changed"})
+
+    def update_role_route(self, user_id):
+        admin = self.require_admin()
+        if not admin:
+            return
+
+        if not user_id.isdigit():
+            self.send_json(400, {"error": "Invalid user ID"})
+            return
+
+        if int(user_id) == admin["user_id"]:
+            self.send_json(400, {"error": "You can't change your own role"})
+            return
+
+        data = self.read_json()
+        if data is None:
+            return
+
+        role = data.get("role")
+        if role not in ROLES:
+            self.send_json(400, {"error": f"Role must be one of: {', '.join(ROLES)}"})
+            return
+
+        if not update_user_role(int(user_id), role):
+            self.send_json(404, {"error": "User not found"})
+            return
+
+        self.send_json(200, dict(get_user(int(user_id))))
+
+    def add_product_route(self):
+        if not self.require_admin():
+            return
+
+        data = self.read_json()
+        if data is None:
+            return
+
+        product, error = self.validate_product(data)
+        if error:
+            self.send_json(400, {"error": error})
+            return
+
+        try:
+            product_id = add_product(
+                product["name"],
+                product["category"],
+                product["price"],
+                product["upc"],
+                product["producer"],
+                product.get("image_url")
+            )
+        except sqlite3.IntegrityError:
+            self.send_json(409, {"error": "A product with this UPC already exists"})
+            return
+
+        self.send_json(201, get_product(product_id))
+
+    def update_product_route(self, product_id):
+        if not self.require_admin():
+            return
+
+        if not product_id.isdigit():
+            self.send_json(400, {"error": "Invalid product ID"})
+            return
+
+        data = self.read_json()
+        if data is None:
+            return
+
+        product, error = self.validate_product(data, partial=True)
+        if error:
+            self.send_json(400, {"error": error})
+            return
+
+        try:
+            updated = update_product(int(product_id), **product)
+        except sqlite3.IntegrityError:
+            self.send_json(409, {"error": "A product with this UPC already exists"})
+            return
+
+        if updated:
+            self.send_json(200, get_product(int(product_id)))
+        else:
+            self.send_json(404, {"error": "Product not found"})
+
+    def add_stock_route(self, product_id):
+        if not self.require_admin():
+            return
+
+        if not product_id.isdigit() or get_product(int(product_id)) is None:
+            self.send_json(404, {"error": "Product not found"})
+            return
+
+        data = self.read_json()
+        if data is None:
+            return
+
+        quantity = data.get("quantity")
+        if type(quantity) is not int or quantity <= 0:
+            self.send_json(400, {"error": "Quantity must be a positive whole number"})
+            return
+
+        note = data.get("note")
+        note = (note.strip() or None) if isinstance(note, str) else None
+
+        add_stock(int(product_id), quantity, note)
+        self.send_json(201, get_product(int(product_id)))
 
     def register_customer(self):
         try:
@@ -258,6 +621,11 @@ class Server(BaseHTTPRequestHandler):
         if data["password"] != data["confirm_password"]:
             hardware_feedback(False)
             self.send_json(400, {"error": "Passwords do not match"})
+            return
+
+        if len(data["password"]) < 8:
+            hardware_feedback(False)
+            self.send_json(400, {"error": "Password must be at least 8 characters"})
             return
 
         try:

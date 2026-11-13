@@ -24,7 +24,27 @@ def init_db():
     schema = SCHEMA_FILE.read_text(encoding="utf-8")
 
     with get_connection() as conn:
+        add_missing_columns(conn)
         conn.executescript(schema)
+
+
+# Columns added after a table was first created. Each one is only added when the
+# table already exists without it, so starting the server again is safe.
+MIGRATIONS = [
+    (
+        "Customers",
+        "customer_loyalty_points",
+        "INTEGER NOT NULL DEFAULT 0 CHECK (customer_loyalty_points >= 0)"
+    ),
+]
+
+
+def add_missing_columns(conn):
+    for table, column, definition in MIGRATIONS:
+        existing = [row["name"] for row in conn.execute(f"PRAGMA table_info({table})")]
+
+        if existing and column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def hash_password(password):

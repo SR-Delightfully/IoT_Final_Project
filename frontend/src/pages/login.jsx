@@ -33,7 +33,7 @@ setStatus({
 });
 
 try {
-  const res = await fetch("http://localhost:5000/login", {
+  const res = await fetch(`${import.meta.env.VITE_API_URL}/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -49,6 +49,19 @@ try {
   if (!res.ok) {
     throw new Error(data.error || "Login failed.");
   }
+
+  // remember who is logged in (the account page and admin dashboard read these)
+  const user = data.user;
+  localStorage.setItem("user_id", user.user_id);
+  localStorage.setItem("user_role", user.user_role);
+  localStorage.setItem("user_fname", user.user_fname || "");
+  if (user.user_role === "customer") {
+    localStorage.setItem("customer_id", user.user_id);
+  } else {
+    localStorage.removeItem("customer_id");
+  }
+
+  window.location.href = user.user_role === "admin" ? "/admin/products" : "/account";
 
   setStatus({
     loading: false,

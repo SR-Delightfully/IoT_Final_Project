@@ -46,6 +46,26 @@ function Registration() {
       return;
     }
 
+    if (formData.password.length < 8) {
+      setStatus({
+        loading: false,
+        success: "",
+        error: "[ERROR] Your password must be at least 8 characters.",
+      });
+
+      return;
+    }
+
+    if (formData.password !== formData.confirm_password) {
+      setStatus({
+        loading: false,
+        success: "",
+        error: "[ERROR] Your passwords do not match.",
+      });
+
+      return;
+    }
+
     try {
       setStatus({
         loading: true,
@@ -53,7 +73,7 @@ function Registration() {
         error: "",
       });
 
-      const res = await fetch("http://localhost:5000/register", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -77,11 +97,13 @@ function Registration() {
 
       setStatus({
         loading: false,
-        success:
-          data.message ||
-          "Your account has been created successfully.",
+        success: "Your account has been created! Taking you to the login page...",
         error: "",
       });
+
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1500);
 
       setFormData({
         first_name: "",
@@ -251,6 +273,8 @@ function Registration() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Enter password"
+                  autoComplete="new-password"
+                  minLength={8}
                   required
                 />
               </div>
@@ -271,6 +295,8 @@ function Registration() {
                   value={formData.confirm_password}
                   onChange={handleChange}
                   placeholder="Confirm password"
+                  autoComplete="new-password"
+                  minLength={8}
                   required
                 />
               </div>

@@ -41,7 +41,7 @@ function Account() {
     // no login session yet, so use the saved customer id or the sample customer
     const customerId = localStorage.getItem("customer_id") || 1;
 
-    fetch(`http://localhost:5050/customers/${customerId}/account`)
+    fetch(`${import.meta.env.VITE_API_URL}/customers/${customerId}/account`)
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Could not load account");

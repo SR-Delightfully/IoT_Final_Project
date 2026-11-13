@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS Customers (
     customer_code VARCHAR(20) UNIQUE,
     customer_address VARCHAR(255) NOT NULL,
     customer_phone VARCHAR(30),
+    customer_loyalty_points INTEGER NOT NULL DEFAULT 0
+        CHECK (customer_loyalty_points >= 0),
     FOREIGN KEY (customer_id)
         REFERENCES Users(user_id)
         ON DELETE CASCADE
@@ -99,9 +101,8 @@ ON Notifications(user_id, notification_status);
 --     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
 --     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
 
-ALTER TABLE Customers
-ADD COLUMN customer_loyalty_points INTEGER NOT NULL DEFAULT 0
-CHECK (customer_loyalty_points >= 0);
+-- customer_loyalty_points is now part of CREATE TABLE Customers above.
+-- Older databases get the column added by init_db() in customer_model.py.
 
 
 CREATE TABLE IF NOT EXISTS Products (
@@ -263,15 +264,16 @@ VALUES
     (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
 
 
-INSERT INTO StockReceptions (
-    product_id, reception_quantity_received, reception_note
+-- Fixed ids + OR IGNORE so restarting the server doesn't add the stock again.
+INSERT OR IGNORE INTO StockReceptions (
+    reception_id, product_id, reception_quantity_received, reception_note
 )
 VALUES
-    (1, 7, 'Initial Pikachu stock'),
-    (2, 3, 'Initial bulbasaur stock');
+    (1, 1, 7, 'Initial Pikachu stock'),
+    (2, 2, 3, 'Initial bulbasaur stock');
 
 
-INSERT INTO ProductTags (
+INSERT OR IGNORE INTO ProductTags (
     product_id, product_tag_epc
 )
 VALUES

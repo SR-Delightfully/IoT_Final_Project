@@ -126,6 +126,32 @@ def update_user_role(user_id, role):
         return cursor.rowcount > 0
 
 
+def update_user_name(user_id, first_name, last_name):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE Users SET user_fname = ?, user_lname = ? WHERE user_id = ?",
+            (first_name.strip(), last_name.strip(), user_id)
+        )
+        return cursor.rowcount > 0
+
+
+def change_password(user_id, current_password, new_password):
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT user_password_hash FROM Users WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+
+        if row is None or not verify_password(current_password, row["user_password_hash"]):
+            return False
+
+        conn.execute(
+            "UPDATE Users SET user_password_hash = ? WHERE user_id = ?",
+            (hash_password(new_password), user_id)
+        )
+        return True
+
+
 def delete_user(user_id):
     with get_connection() as conn:
         cursor = conn.execute(

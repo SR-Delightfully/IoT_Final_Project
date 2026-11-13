@@ -3,6 +3,7 @@ import Fan from "../components/Fan";
 import HumidityBar from "../components/HumidityBar";
 import TempGauge from "../components/TempGuage";
 
+const API = import.meta.env.VITE_API_URL;
 const REFRESH_MS = 2000; // how often to pull new readings
 
 function FridgeCard({ fridge }) {
