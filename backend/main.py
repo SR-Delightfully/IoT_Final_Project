@@ -11,8 +11,9 @@ from models.management_models.model_fridges import get_all_fridges, update_fridg
 from models.management_models.model_readings import get_latest_reading
 from models.management_models.model_alerts import get_all_alerts
 from models.management_models.model_notifications import get_user_notifications
-from models.client_models.model_customers import add_customer
+from models.client_models.model_customers import add_customer, get_customer,get_customer_by_user_id
 from models.management_models.model_stock_receipts import add_stock_receipt
+from models.client_models.model_receipts import get_customer_receipt
 
 from services.breadboardCode import login
 import json
@@ -609,8 +610,8 @@ class Server(BaseHTTPRequestHandler):
             )
             return
 
-        if note is not None and not isinstance(note, str):
-            self.send_json(400, {"error": "Note must be text"})
+        if supplier is not None and not isinstance(supplier, str):
+            self.send_json(400, {"error": "Supplier must be text"})
             return
 
         try:
@@ -808,6 +809,23 @@ class Server(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         parts = self.path.strip("/").split("/")
+                # Hide the product without deleting its database record.
+        if len(parts) == 2 and parts[0] == "products":
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid product ID"})
+                return
+
+            removed = update_product(
+                int(parts[1]),
+                {"product_is_active": 0}
+            )
+
+            if removed:
+                self.send_json(200, {"message": "Product removed"})
+            else:
+                self.send_json(404, {"error": "Product not found"})
+
+            return
 
         if (
             len(parts) != 5

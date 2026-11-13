@@ -67,7 +67,18 @@ def add_customer(first_name, last_name, address, phone, email, password, custome
         )
 
         customer_id = cursor.lastrowid
+        # Give new members a membership code based on their customer ID.
+        if is_member and customer_code is None:
+            customer_code = f"MEM{customer_id:08d}"
 
+            conn.execute(
+                """
+                UPDATE Customers
+                SET customer_code = ?
+                WHERE customer_id = ?
+                """,
+                (customer_code, customer_id)
+            )
         if is_member:
             conn.execute(
                 """
@@ -96,6 +107,26 @@ def get_customer(customer_id):
             WHERE c.customer_id = ?
             """,
             (customer_id,)
+        ).fetchone()
+
+        return dict(row) if row else None
+# Find the customer's account using the user ID from their login token.Needed because user_id and customer_id can be different.
+def get_customer_by_user_id(user_id):
+    with db_connection() as conn:
+        row = conn.execute(
+            # Find the logged-in customer's account and include their loyalty points.
+            """
+            SELECT c.*, u.user_role, u.user_fname, u.user_lname,
+                   u.user_email, u.user_is_verified, u.user_created_at,
+                   COALESCE(cm.customer_membership_points, 0)
+                       AS customer_loyalty_points
+            FROM Customers c
+            JOIN Users u ON c.user_id = u.user_id
+            LEFT JOIN CustomerMemberships cm
+                ON c.customer_id = cm.customer_id
+            WHERE c.user_id = ?
+            """,
+            (user_id,)
         ).fetchone()
 
         return dict(row) if row else None

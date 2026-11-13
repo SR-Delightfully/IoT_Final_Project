@@ -512,7 +512,48 @@ class SelfCheckout:
                         purchase_items[tag["product_id"]]
                     )
                 )
+            # Members earn 1 point per full dollar of the final total.
+            # Save the points and their history together with the purchase.
+            points_earned = 0
 
+            if customer_id is not None and total >= 100:
+                result = conn.execute(
+                    """
+                    UPDATE CustomerMemberships
+                    SET customer_membership_points =
+                            customer_membership_points + ?,
+                        customer_membership_updated_at = CURRENT_TIMESTAMP
+                    WHERE customer_id = ?
+                      AND customer_id IN (
+                          SELECT customer_id FROM Customers
+                          WHERE customer_is_member = 1
+                      )
+                    """,
+                    (total // 100, customer_id)
+                )
+
+                if result.rowcount == 1:
+                    points_earned = total // 100
+
+                    conn.execute(
+                        """
+                        INSERT INTO LoyaltyTransactions (
+                            customer_id,
+                            purchase_id,
+                            loyalty_transaction_type,
+                            loyalty_points_change,
+                            loyalty_transaction_description
+                        )
+                        VALUES (?, ?, 'EARN', ?, ?)
+                        """,
+                        (
+                            customer_id,
+                            purchase_id,
+                            points_earned,
+                            "Points earned from purchase"
+                        )
+                    )
+            
             receipt_number = f"ST-{purchase_id:08d}"
 
             receipt_id = conn.execute(
