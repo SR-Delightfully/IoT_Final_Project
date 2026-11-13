@@ -1,6 +1,7 @@
 
 from models.database import get_connection
-
+# Testing only: allow RFID tags to be reused across purchases.
+RFID_TEST_MODE = True
 
 class SelfCheckout:
     def __init__(self):
@@ -238,7 +239,7 @@ class SelfCheckout:
         placeholders = ", ".join(["?"] * len(unique_epcs))
 
         with get_connection() as conn:
-                        # Find active products whose scanned tags have not already been sold.
+        # Find active products whose scanned tags have not already been sold.
             rows = conn.execute(
                 f"""
                 SELECT
@@ -259,15 +260,17 @@ class SelfCheckout:
                 WHERE UPPER(pt.product_tag_epc) IN ({placeholders})
                     AND pt.product_tag_status = 'ACTIVE'
                     
-                     AND NOT EXISTS (
-                        SELECT 1
-                        FROM ProductTagSales pts
-                        WHERE pts.product_tag_id = pt.product_tag_id
+                     AND (
+                        ? = 1 OR NOT EXISTS (
+                            SELECT 1
+                            FROM ProductTagSales pts
+                            WHERE pts.product_tag_id = pt.product_tag_id
+                        )
                     )
                     AND p.product_is_active = 1
                     AND p.product_stock_quantity > 0
                 """,
-                unique_epcs
+                unique_epcs + [int(RFID_TEST_MODE)]
             ).fetchall()
 
         items = [dict(row) for row in rows]
@@ -499,7 +502,12 @@ class SelfCheckout:
                     (quantity, item["product_id"])
                 )
 
-            for epc in self.session_tags.get(session_id, []):
+             # Test purchases do not create new physical-tag sale records.
+            tags_to_record = (
+                [] if RFID_TEST_MODE else self.session_tags.get(session_id, [])
+            )
+
+            for epc in tags_to_record:
                 tag = conn.execute(
                     """
                     SELECT product_tag_id, product_id
