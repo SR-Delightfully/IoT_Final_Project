@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useStatusToasts } from "../components/Toaster";
 
 function Registration() {
   const [formData, setFormData] = useState({
@@ -17,6 +18,8 @@ function Registration() {
     success: "",
     error: "",
   });
+
+  useStatusToasts(status);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -139,18 +142,6 @@ function Registration() {
               Join today to better equip yourself for your journey.
             </i>
           </p>
-
-          {status.error && (
-            <p className="registration-error">
-              {status.error}
-            </p>
-          )}
-
-          {status.success && (
-            <p className="registration-success">
-              {status.success}
-            </p>
-          )}
 
           <form
             id="customer-registration"

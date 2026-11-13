@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { authHeaders, SESSION_KEYS } from "../utils/auth";
+import { flashToast } from "./Toaster";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -27,7 +28,7 @@ function NavBar() {
     fetch(`${API}/me`, { headers: authHeaders() })
       .then(async (res) => {
         if (res.status === 401) {
-          logOut();
+          logOut("Your session expired. Please log in again.");
           return;
         }
         if (!res.ok) return;
@@ -40,22 +41,28 @@ function NavBar() {
       .catch(() => {});
   }, []);
 
-  function logOut() {
+  function logOut(message = "You have been logged out.") {
     SESSION_KEYS.forEach((key) =>
       localStorage.removeItem(key),
     );
+    flashToast("info", message);
     setUser(null);
     window.location.href = "/login";
   }
 
+  // highlighted for its own page and anything under it (e.g. /account/...)
+  const isActive = (href) => path === href || path.startsWith(`${href}/`);
+
   const link = (href, label) => (
     <a
       href={href}
-      className={`nav-link ${path === href ? "nav-link-active" : ""}`}
+      className={`nav-link ${isActive(href) ? "nav-link-active" : ""}`}
     >
       {label}
     </a>
   );
+
+  const isAdmin = user?.user_role === "admin";
 
   return (
     <nav className="nav-bar">
@@ -65,11 +72,13 @@ function NavBar() {
 
       <div className="nav-links">
         {link("/products", "Products")}
+        {link("/self-checkout", "Self-Checkout")}
 
-        {user?.user_role === "admin" && (
+        {isAdmin && (
           <>
-            {link("/admin/products", "Dashboard")}
-            {link("/admin/users", "Users")}
+            {link("/dashboard/inventory", "Inventory")}
+            {link("/dashboard/fridges", "Fridges")}
+            {link("/dashboard/users", "Users")}
           </>
         )}
       </div>
@@ -85,7 +94,7 @@ function NavBar() {
                 <span className="nav-badge">admin</span>
               )}
             </span>
-            <button type="button" className="nav-logout" onClick={logOut}>
+            <button type="button" className="nav-logout" onClick={() => logOut()}>
               Log out
             </button>
           </>

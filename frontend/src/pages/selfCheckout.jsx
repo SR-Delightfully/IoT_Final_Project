@@ -1,6 +1,7 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Header from "../layout/header";
+import { useToast } from "../components/Toaster";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
@@ -61,6 +62,29 @@ function getCategorySymbol(category) {
   return symbols[category] || "✧";
 }
 
+// product photo, or the category symbol if there is no photo or the link is broken
+function ProductImage({ product }) {
+  const [broken, setBroken] = useState(false);
+
+  if (!product.image || broken) {
+    return (
+      <span className="product-symbol" aria-label={product.name}>
+        {getCategorySymbol(product.category)}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      className="product-image"
+      src={product.image}
+      alt={product.name}
+      loading="lazy"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 function SelfCheckout() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -80,7 +104,11 @@ function SelfCheckout() {
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [receipt, setReceipt] = useState(null);
-  const [message, setMessage] = useState("");
+  const toast = useToast();
+  // errors and warnings pop up as notifications; setMessage("") does nothing
+  const setMessage = useCallback((text) => {
+    if (text) toast.error(text);
+  }, [toast]);
 
   const [loading, setLoading] = useState(true);
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -381,6 +409,8 @@ const categoryCounts = useMemo(
         }),
       });
 
+      toast.success("Payment complete. Thank you for your purchase!");
+
       setReceipt({
         number: data.receipt_number,
         date: data.receipt_created_at
@@ -589,12 +619,6 @@ const categoryCounts = useMemo(
             </div>
           )}
 
-          {message && (
-            <p className="message" role="status">
-              {message}
-            </p>
-          )}
-
           {loading ? (
             <div className="empty">
               <strong>Loading products...</strong>
@@ -684,12 +708,7 @@ const categoryCounts = useMemo(
                     return (
                       <article className="product" key={product.id}>
                         <div className="product-art">
-                            <img
-                              className="product-image"
-                              src={product.image}
-                              alt={product.name}
-                              loading="lazy"
-                            />
+                          <ProductImage product={product} />
 
                           {quantity > 0 && (
                             <span className="in-cart">

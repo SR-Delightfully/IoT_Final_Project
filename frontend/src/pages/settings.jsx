@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useStatusToasts } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL;
@@ -42,6 +43,9 @@ function Settings() {
     success: "",
   });
   const [loadError, setLoadError] = useState("");
+
+  useStatusToasts(profileStatus);
+  useStatusToasts(passwordStatus);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -143,13 +147,6 @@ function Settings() {
           <section className="account-section">
             <h2 className="account-section-title">Your Details</h2>
 
-            {profileStatus.error && (
-              <p className="dashboard-error">{profileStatus.error}</p>
-            )}
-            {profileStatus.success && (
-              <p className="dashboard-success">{profileStatus.success}</p>
-            )}
-
             <form className="settings-form" onSubmit={saveProfile}>
               <label>
                 <span className="form-label">First name</span>
@@ -202,13 +199,6 @@ function Settings() {
 
           <section className="account-section">
             <h2 className="account-section-title">Change Password</h2>
-
-            {passwordStatus.error && (
-              <p className="dashboard-error">{passwordStatus.error}</p>
-            )}
-            {passwordStatus.success && (
-              <p className="dashboard-success">{passwordStatus.success}</p>
-            )}
 
             <form className="settings-form" onSubmit={savePassword}>
               <label className="settings-full">

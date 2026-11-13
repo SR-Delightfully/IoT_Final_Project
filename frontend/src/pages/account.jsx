@@ -69,7 +69,7 @@ function Account() {
       <div className="account-card">
         <div className="account-card-body">
           <a
-            href="/account/settings"
+            href="/settings"
             className="account-button account-settings-button"
           >
             Settings

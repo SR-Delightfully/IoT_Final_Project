@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useToast } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL;
@@ -122,8 +123,8 @@ function ProductForm({ form, onChange, onSubmit, submitLabel, onCancel }) {
 function ProductDashboard() {
   const [products, setProducts] = useState(null);
   const [denied, setDenied] = useState(!localStorage.getItem("token"));
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const toast = useToast();
+  const [loadError, setLoadError] = useState("");
   const [newProduct, setNewProduct] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
@@ -133,8 +134,7 @@ function ProductDashboard() {
     if (err.status === 403) {
       setDenied(true);
     } else {
-      setMessage("");
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -144,7 +144,10 @@ function ProductDashboard() {
         setProducts(data);
         setDenied(false);
       })
-      .catch(handleError);
+      .catch((err) => {
+        if (err.status !== 403) setLoadError(err.message);
+        handleError(err);
+      });
   }, []);
 
   useEffect(() => {
@@ -156,10 +159,7 @@ function ProductDashboard() {
       list.map((p) => (p.product_id === updated.product_id ? updated : p)),
     );
 
-  const succeed = (text) => {
-    setError("");
-    setMessage(text);
-  };
+  const succeed = (text) => toast.success(text);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -204,8 +204,7 @@ function ProductDashboard() {
   const receiveStock = async (p) => {
     const quantity = Number(stockInputs[p.product_id]);
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      setMessage("");
-      setError("Enter a positive whole number to add stock.");
+      toast.error("Enter a positive whole number to add stock.");
       return;
     }
 
@@ -251,12 +250,9 @@ function ProductDashboard() {
             <i>manage the catalogue and stock.</i>
           </p>
 
-          {error && <p className="dashboard-error">{error}</p>}
-          {message && <p className="dashboard-success">{message}</p>}
-
           {!products ? (
             <p className="products-message">
-              <i>loading products...</i>
+              <i>{loadError ? "Could not load products." : "loading products..."}</i>
             </p>
           ) : (
             <>

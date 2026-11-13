@@ -1,16 +1,14 @@
 import { useState } from "react";
+import { flashToast, useToast } from "../components/Toaster";
 
 function Login() {
+const toast = useToast();
 const [formData, setFormData] = useState({
 email: "",
 password: "",
 });
 
-const [status, setStatus] = useState({
-loading: false,
-success: "",
-error: "",
-});
+const [loading, setLoading] = useState(false);
 
 const handleChange = (e) => {
 const { name, value } = e.target;
@@ -26,11 +24,7 @@ const handleSubmit = async (e) => {
 e.preventDefault();
 
 
-setStatus({
-  loading: true,
-  success: "",
-  error: "",
-});
+setLoading(true);
 
 try {
   const res = await fetch(`${import.meta.env.VITE_API_URL}/login`, {
@@ -62,26 +56,11 @@ try {
     localStorage.removeItem("customer_id");
   }
 
-  window.location.href = user.user_role === "admin" ? "/admin/products" : "/account";
-
-  setStatus({
-    loading: false,
-    success: data.message || "Login successful.",
-    error: "",
-  });
-
-  setFormData({
-    email: "",
-    password: "",
-  });
+  flashToast("success", `Welcome back${user.user_fname ? `, ${user.user_fname}` : ""}!`);
+  window.location.href = user.user_role === "admin" ? "/dashboard/inventory" : "/account";
 } catch (error) {
-  setStatus({
-    loading: false,
-    success: "",
-    error:
-      error.message ||
-      "Something went wrong. Please try again.",
-  });
+  setLoading(false);
+  toast.error(error.message || "Something went wrong. Please try again.");
 }
 
 };
@@ -93,18 +72,6 @@ Login to join the fun </h1>
       <p className="login-subtitle">
         <i>Start building your decks now!</i>
       </p>
-
-      {status.error && (
-        <p className="login-error">
-          {status.error}
-        </p>
-      )}
-
-      {status.success && (
-        <p className="login-success">
-          {status.success}
-        </p>
-      )}
 
       <form
         id="customer-login"
@@ -160,11 +127,11 @@ Login to join the fun </h1>
             name="login"
             id="login-btn"
             value={
-              status.loading
+              loading
                 ? "Logging In..."
                 : "Start"
             }
-            disabled={status.loading}
+            disabled={loading}
           />
 
           <div className="already-logged-in">

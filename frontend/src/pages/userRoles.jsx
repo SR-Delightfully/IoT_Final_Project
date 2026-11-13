@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useToast } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL;
@@ -32,15 +33,19 @@ function UserRoles() {
   const [users, setUsers] = useState(null);
   const [denied, setDenied] = useState(!myId);
   const [search, setSearch] = useState("");
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const toast = useToast();
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     if (!myId) return;
 
     request("/admin/users")
       .then(setUsers)
-      .catch((err) => (err.status === 403 ? setDenied(true) : setError(err.message)));
+      .catch((err) => {
+        if (err.status === 403) return setDenied(true);
+        setLoadError(err.message);
+        toast.error(err.message);
+      });
   }, [myId]);
 
   const changeRole = async (user, role) => {
@@ -52,12 +57,10 @@ function UserRoles() {
     try {
       const updated = await request(`/admin/users/${user.user_id}/role`, "PUT", { role });
       setUsers((list) => list.map((u) => (u.user_id === updated.user_id ? updated : u)));
-      setError("");
-      setMessage(`${name} is now ${role === "admin" ? "an admin" : "a customer"}.`);
+      toast.success(`${name} is now ${role === "admin" ? "an admin" : "a customer"}.`);
     } catch (err) {
       if (err.status === 403) setDenied(true);
-      setMessage("");
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -91,12 +94,9 @@ function UserRoles() {
             <i>choose who can manage the store.</i>
           </p>
 
-          {error && <p className="dashboard-error">{error}</p>}
-          {message && <p className="dashboard-success">{message}</p>}
-
           {!users ? (
             <p className="products-message">
-              <i>loading users...</i>
+              <i>{loadError ? "Could not load users." : "loading users..."}</i>
             </p>
           ) : (
             <section className="account-section">

@@ -143,12 +143,20 @@
   transform: translateY(-3px);
 }
 
-.product-image {
+/* Scoped to this page: the self-checkout styles also use .product-image
+   (with min-width: 150%), and every stylesheet is loaded on every page. */
+.product-tile .product-image,
+.product-modal .product-image {
+  display: block;
   width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
   aspect-ratio: 3 / 4;
-  object-fit: cover;
+  object-fit: contain;
   border: 1px solid var(--gold-3);
   background: var(--blue-2);
+  transition: none;
 }
 
 .product-image-empty {

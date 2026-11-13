@@ -4,6 +4,30 @@ function formatPrice(cents) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// product photo, or the first letter of the name if there is no photo
+// or the link is broken
+function ProductImage({ product, className = "" }) {
+  const [broken, setBroken] = useState(false);
+
+  if (!product.product_image_url || broken) {
+    return (
+      <div className={`product-image product-image-empty ${className}`}>
+        {product.product_name.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className={`product-image ${className}`}
+      src={product.product_image_url}
+      alt={product.product_name}
+      loading="lazy"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 function Products() {
   const [products, setProducts] = useState(null);
   const [error, setError] = useState("");
@@ -124,17 +148,7 @@ function Products() {
                         onClick={() => setSelected(p)}
                         onKeyDown={(e) => e.key === "Enter" && setSelected(p)}
                       >
-                        {p.product_image_url ? (
-                          <img
-                            className="product-image"
-                            src={p.product_image_url}
-                            alt={p.product_name}
-                          />
-                        ) : (
-                          <div className="product-image product-image-empty">
-                            {p.product_name.charAt(0)}
-                          </div>
-                        )}
+                        <ProductImage product={p} />
 
                         <h3 className="product-name">{p.product_name}</h3>
                         <span className="product-category">{p.product_category}</span>
@@ -179,17 +193,7 @@ function Products() {
               ×
             </button>
 
-            {selected.product_image_url ? (
-              <img
-                className="product-image product-modal-image"
-                src={selected.product_image_url}
-                alt={selected.product_name}
-              />
-            ) : (
-              <div className="product-image product-image-empty product-modal-image">
-                {selected.product_name.charAt(0)}
-              </div>
-            )}
+            <ProductImage product={selected} className="product-modal-image" />
 
             <div className="product-modal-info">
               <h2 className="product-name">{selected.product_name}</h2>
