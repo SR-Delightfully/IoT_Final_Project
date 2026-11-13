@@ -1,301 +1,588 @@
+PRAGMA foreign_keys = ON;
+BEGIN TRANSACTION;
+--* Reworked Database to make it 3FN so it's easier to read, use, and update later. 
+--? INITIALIZING 'Smart TCG Store' DB TABLES (normalized to 3FN):
 
--- Separated some of the tables into a Users table because employees may not be customers.
 CREATE TABLE IF NOT EXISTS Users (
     user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_role VARCHAR(30) NOT NULL DEFAULT 'customer',
-    user_fname VARCHAR(100) NOT NULL,
-    user_lname VARCHAR(100) NOT NULL,
-    user_email VARCHAR(255) NOT NULL UNIQUE,
-    user_password_hash VARCHAR(255) NOT NULL,
-    user_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    user_role TEXT NOT NULL DEFAULT 'customer'
+        CHECK (user_role IN ('customer', 'employee', 'admin')),
+    user_fname TEXT NOT NULL,
+    user_lname TEXT NOT NULL,
+    user_email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    user_password_hash TEXT NOT NULL,
+    user_is_verified INTEGER NOT NULL DEFAULT 0
+        CHECK (user_is_verified IN (0, 1)),
+    user_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Customer-specific information is stored separately from Users.
-CREATE TABLE IF NOT EXISTS Customers (
-    customer_id INTEGER PRIMARY KEY,
-    customer_code VARCHAR(20) UNIQUE,
-    customer_address VARCHAR(255) NOT NULL,
-    customer_phone VARCHAR(30),
-    customer_loyalty_points INTEGER NOT NULL DEFAULT 0
-        CHECK (customer_loyalty_points >= 0),
-    FOREIGN KEY (customer_id)
-        REFERENCES Users(user_id)
-        ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS Categories (
+    category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_name TEXT NOT NULL UNIQUE,
+    category_description TEXT,
+    category_icon TEXT,
+    category_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    category_image_url TEXT
 );
 
+CREATE TABLE IF NOT EXISTS Rewards (
+    reward_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reward_name TEXT NOT NULL,
+    reward_description TEXT,
+    reward_image_url TEXT,
+    reward_points_cost INTEGER NOT NULL
+        CHECK (reward_points_cost > 0),
+    reward_is_active INTEGER NOT NULL DEFAULT 1
+        CHECK (reward_is_active IN (0, 1)),
+    reward_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Fridges refers to.. fridges? xD
 CREATE TABLE IF NOT EXISTS Fridges (
     fridge_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fridge_name VARCHAR(100) NOT NULL,
-    fridge_location VARCHAR(255),
-    fridge_max_humidity INTEGER NOT NULL,
-    fridge_min_humidity INTEGER NOT NULL,
-    fridge_max_temperature INTEGER NOT NULL,
-    fridge_min_temperature INTEGER NOT NULL,
-    fridge_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fridge_name TEXT NOT NULL,
+    fridge_location TEXT,
+    fridge_min_temperature REAL NOT NULL,
+    fridge_max_temperature REAL NOT NULL,
+    fridge_min_humidity REAL NOT NULL,
+    fridge_max_humidity REAL NOT NULL,
+    fridge_fan_on INTEGER NOT NULL DEFAULT 0
+        CHECK (fridge_fan_on IN (0, 1)),
+    fridge_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (fridge_min_temperature <= fridge_max_temperature),
     CHECK (fridge_min_humidity <= fridge_max_humidity),
-    CHECK (fridge_min_temperature <= fridge_max_temperature)
+    CHECK (fridge_min_humidity >= 0 AND fridge_max_humidity <= 100)
 );
 
-CREATE TABLE IF NOT EXISTS FridgeReadings (
-    reading_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fridge_id INTEGER NOT NULL,
-    reading_humidity INTEGER NOT NULL,
-    reading_temperature INTEGER NOT NULL,
-    reading_recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (fridge_id)
-        REFERENCES Fridges(fridge_id)
-        ON DELETE CASCADE
+CREATE TABLE IF NOT EXISTS MembershipTiers (
+    membership_tier_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    membership_tier_name TEXT NOT NULL UNIQUE,
+    membership_tier_min_points INTEGER NOT NULL UNIQUE
+        CHECK (membership_tier_min_points >= 0)
 );
 
-CREATE INDEX IF NOT EXISTS idx_readings_fridge_time
-ON FridgeReadings(fridge_id, reading_recorded_at);
-
-CREATE TABLE IF NOT EXISTS Alerts (
-    alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fridge_id INTEGER NOT NULL,
-    reading_id INTEGER NOT NULL,
-    alert_type VARCHAR(30) NOT NULL,
-    alert_condition VARCHAR(20) NOT NULL,
-    alert_value INTEGER NOT NULL,
-    alert_message TEXT NOT NULL,
-    alert_status VARCHAR(20) NOT NULL DEFAULT 'unacknowledged',
-    alert_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    alert_acknowledged_at TIMESTAMP NULL,
-    alert_resolved_at TIMESTAMP NULL,
-    alert_acknowledged_by INTEGER,
-    FOREIGN KEY (fridge_id)
-        REFERENCES Fridges(fridge_id),
-    FOREIGN KEY (reading_id)
-        REFERENCES FridgeReadings(reading_id),
-    FOREIGN KEY (alert_acknowledged_by)
-        REFERENCES Users(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS Notifications (
-    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    alert_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    notification_type VARCHAR(30) NOT NULL,
-    notification_status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    notification_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    notification_sent_at TIMESTAMP NULL,
-    notification_read_at TIMESTAMP NULL,
-    FOREIGN KEY (alert_id)
-        REFERENCES Alerts(alert_id),
+-- Users become customers once they make a purchase
+CREATE TABLE IF NOT EXISTS Customers (
+    customer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    customer_code TEXT UNIQUE,
+    customer_phone TEXT,
+    customer_address TEXT,
+    customer_is_member INTEGER NOT NULL DEFAULT 0
+        CHECK (customer_is_member IN (0, 1)),
+    customer_membership_date TEXT,
+    customer_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id)
         REFERENCES Users(user_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
 );
 
-CREATE INDEX IF NOT EXISTS idx_notifications_user_status
-ON Notifications(user_id, notification_status);
+CREATE TABLE IF NOT EXISTS CustomerMemberships (
+    customer_membership_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL UNIQUE,
+    membership_tier_id INTEGER NOT NULL DEFAULT 1,
+    customer_membership_points INTEGER NOT NULL DEFAULT 0
+        CHECK (customer_membership_points >= 0),
+    customer_membership_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id)
+        REFERENCES Customers(customer_id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+    FOREIGN KEY (membership_tier_id)
+        REFERENCES MembershipTiers(membership_tier_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
 
-
--- INSERT INTO Fridges (
---     fridge_name,
---     fridge_location,
---     fridge_max_humidity,
---     fridge_min_humidity,
---     fridge_max_temperature,
---     fridge_min_temperature
--- ) VALUES
---     ('Fridge 1', 'Kitchen', 70, 30, 5, 1),
---     ('Fridge 2', 'Storage Room', 65, 35, 4, 2);
-
-
-
-
+-- Products includes individual cards, booster packs and boxes, starter decks, gaming accessories (play mat, dice, sleeves), and hobby supplies (binders, miniatures) etc.
 CREATE TABLE IF NOT EXISTS Products (
     product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER,
     product_name TEXT NOT NULL,
-    product_category TEXT NOT NULL,
-    product_price INTEGER NOT NULL CHECK (product_price >= 0),
-    product_upc TEXT NOT NULL UNIQUE CHECK (length(product_upc) BETWEEN 12 AND 13),
-    product_producer_company TEXT NOT NULL,
+    product_description TEXT,
+    product_company TEXT,
     product_image_url TEXT,
-    product_active INTEGER NOT NULL DEFAULT 1 CHECK (product_active IN (0, 1)),
-    product_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    product_price_cents INTEGER NOT NULL
+        CHECK (product_price_cents >= 0),
+    product_stock_quantity INTEGER NOT NULL DEFAULT 0
+        CHECK (product_stock_quantity >= 0),
+    product_is_active INTEGER NOT NULL DEFAULT 1
+        CHECK (product_is_active IN (0, 1)),
+    product_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    product_updated_at TEXT,
+
+    FOREIGN KEY (category_id)
+        REFERENCES Categories(category_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS StockReceptions (
-    reception_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_id INTEGER NOT NULL,
-    reception_quantity_received INTEGER NOT NULL CHECK (reception_quantity_received > 0),
-    reception_received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    reception_note TEXT,
+CREATE TABLE IF NOT EXISTS SelfCheckoutSessions (
+    session_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    session_status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (session_status IN ('ACTIVE', 'COMPLETED', 'CANCELLED', 'EXPIRED')),
+    session_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    session_completed_at TEXT,
 
-    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+    FOREIGN KEY (user_id)
+        REFERENCES Users(user_id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
 );
 
+-- Readings refers to the content received by the Fridge's sensors
+CREATE TABLE IF NOT EXISTS Readings (
+    reading_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fridge_id INTEGER NOT NULL,
+    reading_temperature REAL NOT NULL,
+    reading_humidity REAL NOT NULL
+        CHECK (reading_humidity >= 0 AND reading_humidity <= 100),
+    reading_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (fridge_id)
+        REFERENCES Fridges(fridge_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+-- Purchases refers to a list of Product BarCodes
 CREATE TABLE IF NOT EXISTS Purchases (
     purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER,
-    purchase_total INTEGER NOT NULL DEFAULT 0 CHECK (purchase_total >= 0),
-    purchase_points_earned INTEGER NOT NULL DEFAULT 0 CHECK (purchase_points_earned >= 0),
-    purchase_payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (purchase_payment_status IN ('pending', 'paid')),
+    session_id INTEGER UNIQUE,
+    purchase_subtotal_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (purchase_subtotal_cents >= 0),
+    purchase_gst_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (purchase_gst_cents >= 0),
+    purchase_qst_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (purchase_qst_cents >= 0),
+    purchase_discount_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (
+            purchase_discount_cents >= 0
+            AND purchase_discount_cents <=
+                purchase_subtotal_cents + purchase_gst_cents + purchase_qst_cents
+        ),
+    purchase_total_cents INTEGER NOT NULL DEFAULT 0
+        CHECK (
+            purchase_total_cents =
+            purchase_subtotal_cents
+            + purchase_gst_cents
+            + purchase_qst_cents
+            - purchase_discount_cents
+        ),
+    purchase_payment_method TEXT,
+    purchase_status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (purchase_status IN ('PENDING', 'COMPLETED', 'CANCELLED', 'REFUNDED')),
     purchase_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    purchase_receipt_emailed_at TEXT,
 
-    FOREIGN KEY (customer_id) REFERENCES Customers(customer_id)
+    FOREIGN KEY (customer_id)
+        REFERENCES Customers(customer_id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL,
+
+    FOREIGN KEY (session_id)
+        REFERENCES SelfCheckoutSessions(session_id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS PurchaseItems (
     purchase_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
     purchase_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
-    purchase_item_name TEXT NOT NULL,
-    purchase_item_quantity INTEGER NOT NULL CHECK (purchase_item_quantity > 0),
-    purchase_item_unit_price INTEGER NOT NULL CHECK (purchase_item_unit_price >= 0),
+    purchase_item_quantity INTEGER NOT NULL
+        CHECK (purchase_item_quantity > 0),
+    purchase_item_unit_price_cents INTEGER NOT NULL
+        CHECK (purchase_item_unit_price_cents >= 0),
 
-    FOREIGN KEY (purchase_id) REFERENCES Purchases(purchase_id),
-    FOREIGN KEY (product_id) REFERENCES Products(product_id)
+    UNIQUE (purchase_id, product_id),
+    UNIQUE (purchase_item_id, product_id),
+
+    FOREIGN KEY (purchase_id)
+        REFERENCES Purchases(purchase_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    FOREIGN KEY (product_id)
+        REFERENCES Products(product_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
 );
 
+-- Customers gain Loyalty Points when shopping
+
+CREATE TABLE IF NOT EXISTS LoyaltyTransactions (
+    loyalty_transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL,
+    purchase_id INTEGER,
+    loyalty_transaction_type TEXT NOT NULL
+        CHECK (loyalty_transaction_type IN ('EARN', 'REDEEM', 'ADJUST')),
+    loyalty_points_change INTEGER NOT NULL
+        CHECK (loyalty_points_change <> 0),
+    loyalty_transaction_description TEXT,
+    loyalty_transaction_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        (loyalty_transaction_type = 'EARN' AND loyalty_points_change > 0)
+        OR
+        (loyalty_transaction_type = 'REDEEM' AND loyalty_points_change < 0)
+        OR
+        (loyalty_transaction_type = 'ADJUST')
+    ),
+
+    FOREIGN KEY (customer_id)
+        REFERENCES Customers(customer_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    FOREIGN KEY (purchase_id)
+        REFERENCES Purchases(purchase_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+-- Customers receive receipts for their purchases
+CREATE TABLE IF NOT EXISTS Receipts (
+    receipt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_id INTEGER NOT NULL UNIQUE,
+    receipt_number TEXT NOT NULL UNIQUE,
+    receipt_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (purchase_id)
+        REFERENCES Purchases(purchase_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+-- BarCodes can be found on products
+CREATE TABLE IF NOT EXISTS BarCodes (
+    barcode_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    barcode_value TEXT NOT NULL UNIQUE
+        CHECK (length(barcode_value) <= 13),
+    barcode_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_id)
+        REFERENCES Products(product_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+-- Products are equipped with RFID tags to all selfcheckout
 CREATE TABLE IF NOT EXISTS ProductTags (
     product_tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
-    product_tag_epc TEXT NOT NULL UNIQUE CHECK (length(product_tag_epc) BETWEEN 1 AND 24),
-    purchase_item_id INTEGER,
+    product_tag_epc TEXT NOT NULL UNIQUE
+        CHECK (length(product_tag_epc) <= 24),
+    product_tag_status TEXT NOT NULL DEFAULT 'ACTIVE'
+        CHECK (product_tag_status IN ('ACTIVE', 'INACTIVE')),
+    product_tag_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (product_id) REFERENCES Products(product_id),
-    FOREIGN KEY (purchase_item_id) REFERENCES PurchaseItems(purchase_item_id)
+    FOREIGN KEY (product_id)
+        REFERENCES Products(product_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS SessionItems (
+    session_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    session_item_quantity INTEGER NOT NULL DEFAULT 1
+        CHECK (session_item_quantity > 0),
 
-CREATE VIEW IF NOT EXISTS Inventory AS
-SELECT
-    p.product_id,
-    p.product_name,
-    p.product_category,
-    p.product_upc,
-    p.product_price,
-    p.product_producer_company,
-    p.product_active,
-    COALESCE(received.total_received, 0) AS total_received,
-    COALESCE(sold.total_sold, 0) AS total_sold,
-    COALESCE(received.total_received, 0) - COALESCE(sold.total_sold, 0) AS quantity_in_stock,
-    COALESCE(tags.available_epc_tags, 0) AS available_epc_tags
-FROM Products AS p
-LEFT JOIN (
-    SELECT
-        sr.product_id,
-        SUM(sr.reception_quantity_received) AS total_received
-    FROM StockReceptions AS sr
-    GROUP BY sr.product_id
-) AS received
-    ON received.product_id = p.product_id
-LEFT JOIN (
-    SELECT
-        pi.product_id,
-        SUM(pi.purchase_item_quantity) AS total_sold
-    FROM PurchaseItems AS pi
-    JOIN Purchases AS pu
-        ON pu.purchase_id = pi.purchase_id
-    WHERE pu.purchase_payment_status = 'paid'
-    GROUP BY pi.product_id
-) AS sold
-    ON sold.product_id = p.product_id
-LEFT JOIN (
-    SELECT
-        pt.product_id,
-        COUNT(*) AS available_epc_tags
-    FROM ProductTags AS pt
-    WHERE pt.purchase_item_id IS NULL
-    GROUP BY pt.product_id
-) AS tags
-    ON tags.product_id = p.product_id;
+    UNIQUE (session_id, product_id),
+
+    FOREIGN KEY (session_id)
+        REFERENCES SelfCheckoutSessions(session_id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (product_id)
+        REFERENCES Products(product_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+-- Alerts are dire notifications meant only for staff and admin.
+CREATE TABLE IF NOT EXISTS Alerts (
+    alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reading_id INTEGER NOT NULL,
+    alert_type TEXT NOT NULL
+        CHECK (alert_type IN ('TEMPERATURE', 'HUMIDITY', 'SYSTEM')),
+    alert_condition TEXT NOT NULL,
+    alert_value REAL,
+    alert_message TEXT NOT NULL,
+    alert_status TEXT NOT NULL DEFAULT 'UNACKNOWLEDGED'
+        CHECK (alert_status IN ('UNACKNOWLEDGED', 'ACKNOWLEDGED', 'RESOLVED')),
+    alert_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    alert_acknowledged_at TEXT,
+    alert_resolved_at TEXT,
+    alert_acknowledged_by INTEGER,
+
+    FOREIGN KEY (reading_id)
+        REFERENCES Readings(reading_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    FOREIGN KEY (alert_acknowledged_by)
+        REFERENCES Users(user_id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS ProductTagSales (
+    product_tag_sale_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_tag_id INTEGER NOT NULL UNIQUE,
+    purchase_item_id INTEGER NOT NULL,
+    product_tag_sale_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (product_tag_id)
+        REFERENCES ProductTags(product_tag_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    FOREIGN KEY (purchase_item_id)
+        REFERENCES PurchaseItems(purchase_item_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS RewardRedemptions (
+    redemption_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reward_id INTEGER NOT NULL,
+    loyalty_transaction_id INTEGER NOT NULL UNIQUE,
+    redemption_status TEXT NOT NULL DEFAULT 'COMPLETED'
+        CHECK (redemption_status IN ('PENDING', 'COMPLETED', 'CANCELLED')),
+    redemption_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (reward_id)
+        REFERENCES Rewards(reward_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    FOREIGN KEY (loyalty_transaction_id)
+        REFERENCES LoyaltyTransactions(loyalty_transaction_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+-- Notifications refers to content sent to customers and users
+CREATE TABLE IF NOT EXISTS Notifications (
+    notification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    alert_id INTEGER,
+    notification_type TEXT NOT NULL
+        CHECK (notification_type IN ('EMAIL', 'SYSTEM', 'ALERT')),
+    notification_title TEXT NOT NULL,
+    notification_summary TEXT,
+    notification_message_brief TEXT NOT NULL,
+    notification_message_full TEXT NOT NULL,
+    notification_status TEXT NOT NULL DEFAULT 'PENDING'
+        CHECK (notification_status IN ('PENDING', 'SENT', 'READ', 'FAILED')),
+    notification_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notification_sent_at TEXT,
+    notification_read_at TEXT,
+
+    FOREIGN KEY (user_id)
+        REFERENCES Users(user_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+
+    FOREIGN KEY (alert_id)
+        REFERENCES Alerts(alert_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS StockReceipts (
+    stock_receipt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_receipt_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    stock_receipt_supplier TEXT
+);
+
+CREATE TABLE IF NOT EXISTS StockReceiptItems (
+    stock_receipt_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_receipt_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    stock_receipt_item_quantity INTEGER NOT NULL
+        CHECK (stock_receipt_item_quantity > 0),
+
+    UNIQUE (stock_receipt_id, product_id),
+
+    FOREIGN KEY (stock_receipt_id)
+        REFERENCES StockReceipts(stock_receipt_id)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (product_id)
+        REFERENCES Products(product_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+INSERT OR IGNORE INTO MembershipTiers (
+    membership_tier_name,
+    membership_tier_min_points
+)
+VALUES
+    ('Iron', 0),
+    ('Bronze', 100),
+    ('Silver', 250),
+    ('Gold', 500),
+    ('Platinum', 1000),
+    ('Emerald', 2500),
+    ('Diamond', 5000),
+    ('Master', 7500),
+    ('Grandmaster', 10000),
+    ('Challenger', 25000);
+
+CREATE TRIGGER IF NOT EXISTS update_customer_membership_tier
+AFTER UPDATE OF customer_membership_points ON CustomerMemberships
+FOR EACH ROW
+BEGIN
+    UPDATE CustomerMemberships
+    SET
+        membership_tier_id = (
+            SELECT membership_tier_id
+            FROM MembershipTiers
+            WHERE membership_tier_min_points <= NEW.customer_membership_points
+            ORDER BY membership_tier_min_points DESC
+            LIMIT 1
+        ),
+        customer_membership_updated_at = CURRENT_TIMESTAMP
+    WHERE customer_membership_id = NEW.customer_membership_id;
+END;
 
 
-CREATE VIEW IF NOT EXISTS PurchaseReceipts AS
-SELECT
-    pu.purchase_id,
-    'R-' || printf('%06d', pu.purchase_id) AS receipt_number,
-    pu.customer_id,
-    c.customer_code AS membership_number,
-    u.user_fname AS customer_first_name,
-    u.user_lname AS customer_last_name,
-    u.user_email AS customer_email,
-    pu.purchase_created_at,
-    pu.purchase_payment_status,
-    pu.purchase_total,
-    pu.purchase_points_earned,
-    pu.purchase_receipt_emailed_at
-FROM Purchases AS pu
-LEFT JOIN Customers AS c
-    ON c.customer_id = pu.customer_id
-LEFT JOIN Users AS u
-    ON u.user_id = c.customer_id;
+CREATE TRIGGER IF NOT EXISTS set_initial_customer_membership_tier
+AFTER INSERT ON CustomerMemberships
+FOR EACH ROW
+BEGIN
+    UPDATE CustomerMemberships
+    SET
+        membership_tier_id = (
+            SELECT membership_tier_id
+            FROM MembershipTiers
+            WHERE membership_tier_min_points <= NEW.customer_membership_points
+            ORDER BY membership_tier_min_points DESC
+            LIMIT 1
+        )
+    WHERE customer_membership_id = NEW.customer_membership_id;
+END;
 
+CREATE TRIGGER IF NOT EXISTS trg_product_tag_sale_validate
+BEFORE INSERT ON ProductTagSales
+FOR EACH ROW
+WHEN (
+    SELECT product_id
+    FROM ProductTags
+    WHERE product_tag_id = NEW.product_tag_id
+) <> (
+    SELECT product_id
+    FROM PurchaseItems
+    WHERE purchase_item_id = NEW.purchase_item_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Product tag and purchase item must belong to the same product');
+END;
 
-CREATE INDEX IF NOT EXISTS idx_stock_receptions_product
-ON StockReceptions(product_id);
+CREATE TRIGGER IF NOT EXISTS trg_product_tag_sale_update_validate
+BEFORE UPDATE OF product_tag_id, purchase_item_id ON ProductTagSales
+FOR EACH ROW
+WHEN (
+    SELECT product_id
+    FROM ProductTags
+    WHERE product_tag_id = NEW.product_tag_id
+) <> (
+    SELECT product_id
+    FROM PurchaseItems
+    WHERE purchase_item_id = NEW.purchase_item_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Product tag and purchase item must belong to the same product');
+END;
+
+CREATE INDEX IF NOT EXISTS idx_customers_user
+    ON Customers(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_products_category
+    ON Products(category_id);
+
+CREATE INDEX IF NOT EXISTS idx_barcodes_product
+    ON BarCodes(product_id);
+
+CREATE INDEX IF NOT EXISTS idx_product_tags_product_status
+    ON ProductTags(product_id, product_tag_status);
+
+CREATE INDEX IF NOT EXISTS idx_product_tag_sales_purchase_item
+    ON ProductTagSales(purchase_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_session_items_session
+    ON SessionItems(session_id);
 
 CREATE INDEX IF NOT EXISTS idx_purchases_customer_date
-ON Purchases(customer_id, purchase_created_at);
+    ON Purchases(customer_id, purchase_created_at);
 
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase
-ON PurchaseItems(purchase_id);
+    ON PurchaseItems(purchase_id);
 
 CREATE INDEX IF NOT EXISTS idx_purchase_items_product
-ON PurchaseItems(product_id);
+    ON PurchaseItems(product_id);
 
-CREATE INDEX IF NOT EXISTS idx_product_tags_product_sale
-ON ProductTags(product_id, purchase_item_id);
+CREATE INDEX IF NOT EXISTS idx_loyalty_customer_date
+    ON LoyaltyTransactions(customer_id, loyalty_transaction_created_at);
+
+CREATE INDEX IF NOT EXISTS idx_loyalty_purchase
+    ON LoyaltyTransactions(purchase_id);
+
+CREATE INDEX IF NOT EXISTS idx_redemptions_reward
+    ON RewardRedemptions(reward_id);
+
+CREATE INDEX IF NOT EXISTS idx_readings_fridge_date
+    ON Readings(fridge_id, reading_created_at);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_reading
+    ON Alerts(reading_id);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_status
+    ON Alerts(alert_status);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_status
+    ON Notifications(user_id, notification_status);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_alert
+    ON Notifications(alert_id);
+
+CREATE INDEX IF NOT EXISTS idx_stock_receipts_date
+    ON StockReceipts(stock_receipt_date);
+
+CREATE INDEX IF NOT EXISTS idx_stock_receipt_items_receipt
+    ON StockReceiptItems(stock_receipt_id);
+
+CREATE INDEX IF NOT EXISTS idx_stock_receipt_items_product
+    ON StockReceiptItems(product_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_loyalty_earn_per_purchase
+    ON LoyaltyTransactions(purchase_id)
+    WHERE purchase_id IS NOT NULL
+      AND loyalty_transaction_type = 'EARN';
+
+CREATE VIEW IF NOT EXISTS CustomerLoyaltyBalances AS
+SELECT
+    Customers.customer_id,
+    Customers.user_id,
+    COALESCE(SUM(LoyaltyTransactions.loyalty_points_change), 0)
+        AS customer_loyalty_points
+FROM Customers
+LEFT JOIN LoyaltyTransactions
+    ON Customers.customer_id = LoyaltyTransactions.customer_id
+GROUP BY
+    Customers.customer_id,
+    Customers.user_id;
 
 
-INSERT OR IGNORE INTO Users (
-    user_role, user_fname, user_lname, user_email, user_password_hash
-)
-VALUES ('customer', 'Alex', 'Martin', 'alex.martin@example.com', '12934ednde23230');
-
-INSERT OR IGNORE INTO Customers (
-    customer_id, customer_code, customer_address, customer_phone, customer_loyalty_points
-)
-SELECT user_id, 'MEM' || printf('%08d', user_id), '123 Acadie Street', '1234321230', 0
-FROM Users
-WHERE user_email = 'alex.martin@example.com';
-
-
-INSERT OR IGNORE INTO Products (
-    product_id, product_name, product_category, product_price, product_upc, product_producer_company
-)
-VALUES
-    (1, 'Pikachu', 'Rare Card', 250, '0123456789012', 'Pikachu Inc.'),
-    (2, 'Bulbasaur', 'Common Card', 300, '0987654321098', 'Bulbasaur Co.');
-
---This will prevent duplicate stock quantities when the server restarts 
-INSERT INTO StockReceptions (
-    product_id,
-    reception_quantity_received,
-    reception_note
-)
-SELECT 1, 7, 'Initial Pikachu stock'
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM StockReceptions
-    WHERE product_id = 1
-      AND reception_note = 'Initial Pikachu stock'
-);
-
-INSERT INTO StockReceptions (
-    product_id,
-    reception_quantity_received,
-    reception_note
-)
-SELECT 2, 3, 'Initial bulbasaur stock'
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM StockReceptions
-    WHERE product_id = 2
-      AND reception_note = 'Initial bulbasaur stock'
-);
-
-
-INSERT OR IGNORE INTO ProductTags (
-    product_id,
-    product_tag_epc
-)
-VALUES
-    (1, 'A00000000000000000004983'), -- Pikachu
-    (2, 'A00000000000000000004985'), -- Bulbasaur
-    (1, 'A00000000000000000004986'), -- Pikachu
-    (2, 'A00000000000000000004949'); -- Bulbasaur
+COMMIT;

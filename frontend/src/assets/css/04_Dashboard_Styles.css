@@ -1,0 +1,1397 @@
+html {
+  min-height: 100%;
+}
+
+.dashboard-page,
+.dashboard-page *,
+.dashboard-page *::before,
+.dashboard-page *::after {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.dashboard-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(
+      0,
+      1fr
+    );
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "title title stats stats"
+    "fridges fridges notifications alerts"
+    "fridges fridges notifications alerts";
+  gap: clamp(0.55rem, 0.9vw, 1rem);
+  width: 100%;
+  height: 98vh;
+  max-width: 1800px;
+  min-height: 0;
+  padding: clamp(0.65rem, 1vw, 1.1rem);
+  margin: 0 auto;
+  overflow: hidden;
+  align-content: stretch;
+}
+
+.dashboard-page > .fridge-page-header {
+  grid-area: title;
+  align-self: center;
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+}
+
+.dashboard-page > .fridge-page-header h1 {
+  margin: 0.25rem 0;
+
+  font-size: clamp(1.35rem, 2vw, 2rem);
+
+  line-height: 1.1;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page > .fridge-page-header p {
+  margin: 0.25rem 0;
+
+  font-size: 0.8rem;
+
+  line-height: 1.35;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page .fridge-last-updated {
+  font-size: 0.65rem;
+
+  opacity: 0.7;
+}
+
+.dashboard-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  align-self: stretch;
+}
+
+.dashboard-stat {
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  gap: 0.3rem;
+
+  padding: 0.55rem;
+
+  border: 1px solid var(--border-color, #303b4c);
+
+  background: var(--card-bg, #101722);
+
+  color: var(--text-color, #f3ead5);
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-stat:first-child {
+  grid-column: auto;
+}
+
+.dashboard-stat-label {
+  color: var(--gold, #b9a15b);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-stat-value {
+  font-size: clamp(1.1rem, 1.6vw, 1.65rem);
+
+  line-height: 1;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-stat-detail {
+  color: var(--muted, #a7afbd);
+
+  font-size: 0.62rem;
+
+  line-height: 1.3;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-stat.has-warning {
+  border-color: #f0a04b;
+}
+
+.dashboard-page > .dashboard-panel {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 0.55rem;
+
+  height: 100%;
+
+  min-height: 0;
+
+  min-width: 0;
+
+  max-height: none;
+
+  padding: 0.7rem;
+
+  border: 1px solid var(--border-color, #303b4c);
+
+  background: var(--card-bg, #101722);
+
+  color: var(--text-color, #f3ead5);
+}
+
+.dashboard-page > #alerts {
+  grid-area: alerts;
+  min-height: 0;
+}
+
+.dashboard-page > #notifications {
+  grid-area: notifications;
+  min-height: 0;
+}
+
+.dashboard-page > #fridges {
+  grid-area: fridges;
+  min-height: 0;
+}
+
+.dashboard-panel-header {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 0.4rem;
+
+  flex-wrap: wrap;
+}
+
+.dashboard-panel-header h2 {
+  margin: 0.2rem 0 0;
+
+  font-size: clamp(0.9rem, 1.15vw, 1.15rem);
+
+  line-height: 1.2;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-count {
+  flex-shrink: 0;
+
+  padding: 0.2rem 0.35rem;
+
+  border: 1px solid var(--border-color, #303b4c);
+
+  font-size: 0.58rem;
+
+  letter-spacing: 0.04em;
+}
+
+.dashboard-list {
+  display: flex;
+
+  flex: 1 1 auto;
+
+  flex-direction: column;
+
+  align-items: stretch;
+
+  gap: 0.35rem;
+
+  min-height: 0;
+
+  min-width: 0;
+
+  overflow-x: hidden;
+
+  overflow-y: auto;
+
+  overscroll-behavior: contain;
+
+  scrollbar-width: thin;
+}
+
+.dashboard-alert,
+.dashboard-notification {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  align-items: flex-start;
+
+  gap: 0.4rem;
+
+  min-width: 0;
+
+  max-width: 100%;
+
+  padding: 0.45rem;
+
+  border: 1px solid var(--border-color, #303b4c);
+}
+
+.dashboard-alert-indicator,
+.dashboard-notification-indicator {
+  flex: 0 0 0.4rem;
+
+  width: 0.4rem;
+
+  height: 0.4rem;
+
+  margin-top: 0.25rem;
+
+  border-radius: 50%;
+
+  background: #f0a04b;
+}
+
+.dashboard-notification-indicator {
+  background: #64748b;
+}
+
+.dashboard-notification.is-unread {
+  border-color: var(--gold, #b9a15b);
+}
+
+.dashboard-notification.is-unread .dashboard-notification-indicator {
+  background: #55f5cb;
+}
+
+.dashboard-list-content {
+  display: flex;
+
+  flex: 1 1 auto;
+
+  flex-direction: column;
+
+  gap: 0.2rem;
+
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+
+  word-break: break-word;
+}
+
+.dashboard-list-content strong {
+  font-size: 0.7rem;
+
+  line-height: 1.3;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-list-content > span,
+.dashboard-list-content time {
+  color: var(--muted, #a7afbd);
+
+  font-size: 0.62rem;
+
+  line-height: 1.35;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-action {
+  flex: 0 0 auto;
+
+  max-width: 100%;
+
+  padding: 0.3rem 0.4rem;
+
+  border: 1px solid var(--gold, #b9a15b);
+
+  background: transparent;
+
+  color: inherit;
+
+  font: inherit;
+
+  font-size: 0.58rem;
+
+  line-height: 1.3;
+
+  overflow-wrap: anywhere;
+
+  cursor: pointer;
+}
+
+.dashboard-action:hover:not(:disabled) {
+  background: var(--gold, #b9a15b);
+
+  color: #101722;
+}
+
+.dashboard-action:disabled {
+  opacity: 0.5;
+
+  cursor: wait;
+}
+
+.dashboard-empty,
+.dashboard-error {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-empty {
+  color: var(--muted, #a7afbd);
+}
+
+.dashboard-error {
+  opacity: 0;
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translate(-50%, -15%);
+  background: linear-gradient(
+    45deg,
+    var(--gold-5) 0%,
+    var(--gold-8) 5%,
+    var(--gold-5) 4%,
+    var(--gold-8) 95%,
+    var(--gold-7) 94%
+  );
+  border: 3px double var(--gold-4);
+  box-shadow: inset 0 0 0.3rem var(--gold-3);
+  color: var(--gold-3);
+  font-weight: 800;
+  padding: 0.5rem 3rem 0.5rem 1.5rem;
+}
+
+.dashboard-error::after {
+  content: "X";
+  position: absolute;
+  right: 0.25rem;
+  top: 0.25rem;
+  /* background: var(--gold-3); */
+  background: linear-gradient(
+    45deg,
+    var(--gold-2) 0%,
+    var(--gold-5) 5%,
+    var(--gold-2) 4%,
+    var(--gold-5) 95%,
+    var(--gold-4) 94%
+  );
+  color: var(--gold-7);
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dashboard-error:hover::after {
+  /* display: block; */
+  pointer-events: auto;
+  color: var(--gold-8);
+  cursor: pointer !important;
+}
+
+.dashboard-page > #fridges .fridge-grid {
+  display: flex;
+  gap: 0.55rem;
+  flex: 1 1 auto;
+}
+
+.dashboard-page > #fridges .fridge-grid > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  align-self: start;
+}
+
+.dashboard-page #fridges .fridge-card {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.dashboard-page #fridges .fridge-card-body {
+  display: flex;
+  flex-flow: column nowrap;
+  gap: 0.25rem;
+  min-height: 0;
+  padding: 0.65rem;
+}
+
+.dashboard-page #fridges .fridge-title-wrapper {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 0.35rem;
+
+  flex-wrap: wrap;
+}
+
+.dashboard-page #fridges .fridge-title {
+  margin: 0;
+
+  font-size: clamp(0.85rem, 1vw, 1.05rem);
+
+  line-height: 1.2;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .fridge-device-status,
+.dashboard-page #fridges .fridge-unit-id {
+  font-size: 0.58rem;
+
+  line-height: 1.3;
+}
+
+.dashboard-page #fridges .device-status-dot,
+.dashboard-page #fridges .fan-status-dot {
+  flex-shrink: 0;
+}
+
+.dashboard-page #fridges .fridge-header {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 0.35rem;
+
+  margin: 0;
+
+  padding: 0;
+}
+
+.dashboard-page #fridges .fridge-ceiling {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 0.4rem;
+
+  min-height: 0;
+
+  padding: 0.35rem 0.45rem;
+}
+
+.dashboard-page #fridges .ceiling-label {
+  font-size: 0.55rem;
+
+  line-height: 1.3;
+
+  letter-spacing: 0.04em;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .fan-indicator {
+  display: flex;
+
+  flex-direction: row;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 0.4rem;
+
+  min-width: 0;
+
+  width: 100%;
+}
+
+.dashboard-page #fridges .fan-ceiling-mount {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  align-items: center;
+
+  justify-content: center;
+
+  width: 2.6rem;
+
+  height: 2.6rem;
+
+  position: relative;
+}
+
+.dashboard-page #fridges .fan-mount-bracket {
+  max-height: 0.2rem;
+}
+
+.dashboard-page #fridges .fan-mount-stem {
+  max-height: 0.3rem;
+}
+
+.dashboard-page #fridges .fan {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  width: 2.3rem;
+
+  height: 2.3rem;
+}
+
+.dashboard-page #fridges .fan-icon {
+  display: block;
+
+  width: 100%;
+
+  height: 100%;
+}
+
+.dashboard-page #fridges .fan-content {
+  display: flex;
+
+  flex: 1 1 auto;
+
+  align-items: center;
+
+  justify-content: flex-end;
+
+  gap: 0.4rem;
+
+  min-width: 0;
+}
+
+.dashboard-page #fridges .fan-details {
+  min-width: 0;
+}
+
+.dashboard-page #fridges .fan-state {
+  font-size: 0.58rem;
+
+  line-height: 1.3;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .fan-toggle {
+  flex: 0 0 auto;
+
+  padding: 0.3rem 0.4rem;
+
+  font-size: 0.58rem;
+
+  line-height: 1.3;
+}
+
+.dashboard-page #fridges .fridge-monitoring {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 0.35rem;
+
+  min-height: 0;
+
+  margin: 0;
+
+  padding: 0.4rem;
+}
+
+.dashboard-page #fridges .fridge-section-heading {
+  display: flex;
+
+  align-items: center;
+
+  gap: 0.4rem;
+
+  margin: 0;
+
+  padding: 0;
+}
+
+.dashboard-page #fridges .fridge-section-heading h3 {
+  margin: 0;
+
+  font-size: 0.65rem;
+
+  line-height: 1.3;
+
+  letter-spacing: 0.05em;
+}
+
+.dashboard-page #fridges .gauge-container {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  align-items: start;
+
+  gap: 0.55rem;
+
+  min-width: 0;
+
+  margin: 0;
+
+  padding: 0;
+}
+
+.dashboard-page #fridges .gauge {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: stretch;
+
+  gap: 0.25rem;
+
+  min-width: 0;
+
+  margin: 0;
+
+  padding: 0;
+}
+
+.dashboard-page #fridges .fridge-subtitle {
+  margin: 0;
+
+  font-size: 0.68rem;
+
+  line-height: 1.3;
+
+  text-align: center;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .temperature-gauge {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 0.15rem;
+
+  width: 100%;
+
+  min-width: 0;
+
+  margin: 0;
+
+  padding: 0;
+}
+
+.dashboard-page #fridges .temperature-dial {
+  width: min(100%, 5rem);
+
+  aspect-ratio: 1;
+
+  min-height: 0;
+
+  margin: 0 auto;
+}
+
+.dashboard-page #fridges .temperature-needle {
+  max-width: 100%;
+}
+
+.dashboard-page #fridges .temperature-center {
+  max-width: 100%;
+}
+
+.dashboard-page #fridges .humidity-meter {
+  display: flex;
+
+  flex-direction: column;
+
+  justify-content: center;
+
+  gap: 0.4rem;
+
+  width: 100%;
+
+  min-width: 0;
+
+  margin: 0;
+
+  padding: 0.6rem 0 0;
+}
+
+.dashboard-page #fridges .humidity-track {
+  position: relative;
+
+  width: 100%;
+
+  min-width: 0;
+}
+
+.dashboard-page #fridges .humidity-fill {
+  max-width: 100%;
+}
+
+.dashboard-page #fridges .gauge-reading {
+  margin: 0.1rem 0;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.dashboard-page #fridges .gauge-limits {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.25rem;
+  width: 100%;
+  font-size: 0.58rem;
+  line-height: 1.2;
+}
+
+.dashboard-page #fridges .customer-fridge-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.45rem;
+}
+
+.dashboard-page #fridges .form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.4rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-page #fridges .form-field,
+.dashboard-page #fridges .form-field-full {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.dashboard-page #fridges .form-label {
+  font-size: 0.62rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .form-grid input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.dashboard-page #fridges .form-grid input[type="submit"] {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  font: inherit;
+  font-size: 0.6rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.dashboard-page #fridges .fridge-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.4rem 0.45rem 0;
+  font-size: 0.6rem;
+  line-height: 1.3;
+}
+
+.dashboard-page #fridges .footer-label,
+.dashboard-page #fridges .footer-fan-state,
+.dashboard-page #fridges .footer-unit {
+  font-size: 0.58rem;
+
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "title alerts notifications"
+    "stats alerts notifications"
+    "fridges alerts notifications";
+  gap: clamp(0.55rem, 0.9vw, 1rem);
+  width: 100%;
+  height: calc(100vh - var(--nav-height, 3.75rem));
+  height: calc(100dvh - var(--nav-height, 3.75rem));
+  max-width: 1800px;
+  min-height: 0;
+  padding: clamp(0.65rem, 1vw, 1.1rem);
+  margin: 0 auto;
+  overflow: hidden;
+  align-content: stretch;
+}
+
+.dashboard-page > .fridge-page-header {
+  grid-area: title;
+  align-self: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0.25rem 0.4rem;
+}
+
+.dashboard-page > .fridge-page-header h1 {
+  margin: 0.25rem 0;
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page > .fridge-page-header p {
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.dashboard-page > #fridges {
+  grid-area: fridges;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-page > #alerts {
+  grid-area: alerts;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-page > #notifications {
+  grid-area: notifications;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-page > .dashboard-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--blue-5, var(--border-color, #303b4c));
+  background: var(--blue-1, var(--card-bg, #101722));
+  color: var(--tone-9, var(--text-color, #f3ead5));
+}
+
+.dashboard-page .dashboard-panel-header h2 {
+  color: var(--gold-6, var(--gold, #b9a15b));
+}
+
+.dashboard-page .dashboard-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.dashboard-page > #fridges .fridge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  align-content: stretch;
+  flex: 1 1 auto;
+  gap: 0.55rem;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dashboard-page > #fridges .fridge-grid > * {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+}
+
+.dashboard-page #fridges .fridge-card {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.dashboard-page #fridges .fridge-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "title title"
+    "identity fan"
+    "monitoring monitoring"
+    "config config"
+    "footer footer";
+  gap: 0.45rem;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.55rem;
+  overflow: hidden;
+}
+
+.dashboard-page #fridges .fridge-title-wrapper {
+  grid-area: title;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0 0 0.4rem;
+}
+
+.dashboard-page #fridges .fridge-title {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  font-size: clamp(0.75rem, 0.95vw, 1rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .fridge-device-status,
+.dashboard-page #fridges .fridge-unit-id {
+  flex: 0 0 auto;
+  font-size: 0.55rem;
+  line-height: 1.2;
+}
+
+.dashboard-page #fridges .fridge-header {
+  grid-area: identity;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.3rem 0.4rem;
+}
+
+.dashboard-page #fridges .fridge-ceiling {
+  grid-area: fan;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  min-height: 0;
+  min-width: 0;
+  padding: 0.25rem 0.35rem;
+}
+
+.dashboard-page #fridges .ceiling-label {
+  max-width: 45%;
+  font-size: 0.48rem;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .fan-indicator {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+}
+
+.dashboard-page #fridges .fan-ceiling-mount {
+  position: relative;
+  display: flex;
+  flex: 0 0 2.1rem;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  transform: none;
+}
+
+.dashboard-page #fridges .fan-mount-bracket,
+.dashboard-page #fridges .fan-mount-stem {
+  display: none;
+}
+
+.dashboard-page #fridges .fan {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.dashboard-page #fridges .fan-icon {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: none;
+}
+
+.dashboard-page #fridges .fan-details {
+  flex: 0 1 auto;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.dashboard-page #fridges .fan-label,
+.dashboard-page #fridges .fan-state {
+  font-size: 0.5rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page #fridges .fan-toggle {
+  min-height: 1.7rem;
+  margin: 0;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.5rem;
+  line-height: 1.1;
+}
+
+.dashboard-page #fridges .fridge-monitoring {
+  grid-area: monitoring;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 0;
+  margin: 0;
+  padding: 0.4rem;
+  overflow: hidden;
+}
+
+.dashboard-page #fridges .fridge-monitoring .fridge-section-heading {
+  margin: 0;
+  padding-bottom: 0.25rem;
+  font-size: 0.58rem;
+}
+
+.dashboard-page #fridges .gauge-container {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.4rem;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.dashboard-page #fridges .gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.4rem;
+  overflow: hidden;
+}
+
+.dashboard-page #fridges .fridge-subtitle {
+  margin: 0;
+  font-size: 0.58rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.dashboard-page #fridges .temperature-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-page #fridges .temperature-dial {
+  width: min(100%, 4.4rem);
+  margin: 0 auto;
+}
+
+.dashboard-page #fridges .gauge-reading {
+  margin: 0;
+  font-size: clamp(0.8rem, 1vw, 1rem);
+  line-height: 1.15;
+}
+
+.dashboard-page #fridges .gauge-limits,
+.dashboard-page #fridges .humidity-scale {
+  gap: 0.2rem;
+  font-size: 0.5rem;
+  line-height: 1.2;
+}
+
+.dashboard-page #fridges .humidity-meter {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0 0;
+}
+
+.dashboard-page #fridges .humidity-track {
+  width: 100%;
+  min-width: 0;
+  height: 0.75rem;
+}
+
+.dashboard-page #fridges .humidity-indicator {
+  font-size: clamp(0.9rem, 1.1vw, 1.2rem);
+}
+
+.dashboard-page #fridges .customer-fridge-form {
+  grid-area: config;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.4rem;
+  overflow: hidden;
+}
+
+.dashboard-page #fridges .customer-fridge-form .fridge-section-heading {
+  margin: 0;
+  padding-bottom: 0.25rem;
+  font-size: 0.58rem;
+}
+
+.dashboard-page #fridges .customer-fridge-form .form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.35rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.dashboard-page #fridges .customer-fridge-form .form-field,
+.dashboard-page #fridges .customer-fridge-form .form-field-full {
+  min-width: 0;
+  grid-column: auto;
+  gap: 0.2rem;
+}
+
+.dashboard-page #fridges .customer-fridge-form .form-label {
+  font-size: 0.55rem;
+  line-height: 1.2;
+}
+
+.dashboard-page #fridges .customer-fridge-form input,
+.dashboard-page #fridges .customer-fridge-form select,
+.dashboard-page #fridges .customer-fridge-form textarea {
+  min-width: 0;
+  min-height: 1.8rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.7rem;
+}
+
+.dashboard-page #fridges .customer-fridge-form input[type="submit"] {
+  width: auto;
+  min-height: 1.8rem;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.53rem;
+  white-space: nowrap;
+}
+
+.dashboard-page #fridges .fridge-footer {
+  grid-area: footer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.35rem 0.1rem 0;
+  font-size: 0.52rem;
+}
+
+.dashboard-page #fridges .footer-label,
+.dashboard-page #fridges .footer-fan-state,
+.dashboard-page #fridges .footer-unit {
+  font-size: 0.52rem;
+  line-height: 1.2;
+}
+
+@media (max-height: 800px) and (min-width: 901px) {
+  .dashboard-page {
+    gap: 0.4rem;
+    padding: 0.45rem;
+  }
+
+  .dashboard-page > .dashboard-panel {
+    padding: 0.45rem;
+  }
+
+  .dashboard-page #fridges .fridge-card-body {
+    gap: 0.3rem;
+    padding: 0.4rem;
+  }
+
+  .dashboard-page #fridges .temperature-dial {
+    width: min(100%, 3.5rem);
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 901px) {
+  .dashboard-page {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dashboard-page #fridges .fridge-title {
+    font-size: 0.75rem;
+  }
+
+  .dashboard-page #fridges .ceiling-label {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-page {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto minmax(18rem, auto) minmax(18rem, auto);
+    grid-template-areas:
+      "title stats"
+      "fridges fridges"
+      "alerts notifications"
+      "alerts notifications";
+    height: auto;
+    min-height: calc(100dvh - var(--nav-height, 3.75rem));
+    overflow: visible;
+  }
+
+  .dashboard-page > #fridges {
+    height: auto;
+    min-height: 0;
+  }
+
+  .dashboard-page > #fridges .fridge-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+    overflow: visible;
+  }
+
+  .dashboard-page #fridges .fridge-card {
+    height: auto;
+    min-height: 25rem;
+    overflow: hidden;
+  }
+
+  .dashboard-page #fridges .fridge-card-body {
+    height: 100%;
+    min-height: 25rem;
+  }
+
+  .dashboard-page > #alerts,
+  .dashboard-page > #notifications {
+    min-height: 18rem;
+    height: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas:
+      "title"
+      "stats"
+      "fridges"
+      "alerts"
+      "notifications";
+    padding: 0.55rem;
+  }
+
+  .dashboard-page > #fridges .fridge-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-page #fridges .fridge-card {
+    min-height: 25rem;
+  }
+
+  .dashboard-page #fridges .fridge-card-body {
+    min-height: 25rem;
+  }
+
+  .dashboard-page > #alerts,
+  .dashboard-page > #notifications {
+    min-height: 14rem;
+  }
+}
