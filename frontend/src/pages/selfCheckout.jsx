@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Header from "../layout/header";
 import { useToast } from "../components/Toaster";
+import { authHeaders } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
@@ -403,6 +404,7 @@ const categoryCounts = useMemo(
     try {
       const data = await request("/checkout", {
         method: "POST",
+        headers: authHeaders(),
         body: JSON.stringify({
           session_id: sessionId,
           payment_method: paymentMethod,
