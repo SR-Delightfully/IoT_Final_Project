@@ -7,8 +7,8 @@ def get_all_products():
     with db_connection() as conn:
         rows = conn.execute(
             """
-            SELECT p.*, c.category_name,
-                   b.barcode_value
+            SELECT p.*, c.category_id, c.category_name, c.category_image_url,
+                b.barcode_value
             FROM Products p
             LEFT JOIN Categories c ON p.category_id = c.category_id
             LEFT JOIN BarCodes b ON p.product_id = b.product_id

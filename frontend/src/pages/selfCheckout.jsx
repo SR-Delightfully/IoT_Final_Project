@@ -19,6 +19,8 @@ function normalizeProduct(product) {
       product.category_name ||
       product.category ||
       "Uncategorized",
+    categoryId: Number(product.category_id),
+    categoryImage: product.category_image_url || "",
     description: product.product_description || product.description || "",
     company: product.product_company || product.company || "",
     price:
@@ -294,22 +296,47 @@ function SelfCheckout() {
     await updateQuantity(productId, 0);
   }
 
-  const categories = useMemo(
-    () => [...new Set(products.map((product) => product.category))],
-    [products]
-  );
+const categories = useMemo(() => {
+  const categoryOrder = [
+    "Pokémon",
+    "Magic: The Gathering",
+    "Yu-Gi-Oh!",
+    "Riftbound",
+    "Accessories",
+  ];
 
-  const categoryCounts = useMemo(
-    () =>
-      categories.map((item) => ({
+  const uniqueCategories = [
+    ...new Set(products.map((product) => product.category)),
+  ];
+
+  return uniqueCategories.sort((a, b) => {
+    const indexA = categoryOrder.indexOf(a);
+    const indexB = categoryOrder.indexOf(b);
+
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+
+    return indexA - indexB;
+  });
+}, [products]);
+
+const categoryCounts = useMemo(
+  () =>
+    categories.map((item) => {
+      const categoryProducts = products.filter(
+        (product) => product.category === item
+      );
+
+      return {
         name: item,
-        count: products.filter((product) => product.category === item).length,
-        preview: products.find(
-          (product) => product.category === item && product.image
-        )?.image || "",
-      })),
-    [products, categories]
-  );
+        count: categoryProducts.length,
+        preview: categoryProducts.find(
+          (product) => product.category_image_url
+        )?.category_image_url || "",
+      };
+    }),
+  [products, categories]
+);
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -607,16 +634,12 @@ function SelfCheckout() {
                     onClick={() => selectCategory(item.name)}
                   >
                     <div className="category-card-art">
-                      {item.preview ? (
+                      {item.preview && (
                         <img
                           src={item.preview}
                           alt=""
                           loading="lazy"
                         />
-                      ) : (
-                        <span className="category-symbol">
-                          {getCategorySymbol(item.name)}
-                        </span>
                       )}
 
                       <span className="category-index">
@@ -891,6 +914,7 @@ function SelfCheckout() {
 
               <h3>How would you like to pay?</h3>
 
+              <div className="payment-options">
               {[
                 {
                   id: "card",
@@ -926,7 +950,7 @@ function SelfCheckout() {
                   </span>
                 </button>
               ))}
-
+              </div>
               <p className="demo-notice">
                 PAYMENT IS NOT PROCESSED BY THIS APPLICATION.
               </p>
@@ -952,10 +976,13 @@ function SelfCheckout() {
               </button>
             </div>
           )}
+<<<<<<< Updated upstream
 
           <div className="cart-footer">
             SMART TCG STORE · REGISTER 01
           </div>
+=======
+>>>>>>> Stashed changes
         </aside>
       </div>
     </main>
