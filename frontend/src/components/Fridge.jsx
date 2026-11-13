@@ -5,7 +5,10 @@ import Fan from "./Fan";
 
 function Fridge({ fridge }) {
   const [fanStatus, setFanStatus] = useState(
-    String(fridge.fan_status ?? "OFF").toUpperCase()
+    String(fridge.fridge_fan_on ?? fridge.fan_status ?? "OFF") === "1" ||
+    String(fridge.fridge_fan_on ?? fridge.fan_status ?? "OFF").toUpperCase() === "ON"
+      ? "ON"
+      : "OFF"
   );
 
   function toggleFan() {
@@ -15,28 +18,36 @@ function Fridge({ fridge }) {
   return (
     <article className="fridge-card">
       <div className="fridge-card-body">
-        <div className="fridge-title-wrapper">
+        <header className="fridge-title-wrapper">
           <h2 className="fridge-title">{fridge.fridge_name}</h2>
-                    <span className="fridge-device-status">
+          <span className={`fridge-device-status ${fanStatus === "ON" ? "is-active" : ""}`}>
             <span className="device-status-dot" />
-            MONITORING
+            SYSTEM {fanStatus === "ON" ? "ACTIVE" : "STANDBY"}
           </span>
-        </div>
-        <div className="fridge-ceiling">
-          <span className="ceiling-label">INTERNAL COOLING UNIT</span>
-          <Fan status={fanStatus} onToggle={toggleFan} />
-        </div>
+        </header>
 
-        <header className="fridge-header">
+        <div className="fridge-identity">
           <span className="fridge-unit-id">
             UNIT / {String(fridge.fridge_id).padStart(2, "0")}
           </span>
+          <span className="fridge-location">
+            {fridge.fridge_location || fridge.location || "LOCATION UNASSIGNED"}
+          </span>
+        </div>
 
-        </header>
+        <section className="fridge-fan-panel">
+          <span className="ceiling-label">COOLING ASSEMBLY</span>
+          <Fan status={fanStatus} onToggle={toggleFan} />
+        </section>
 
         <section className="fridge-monitoring">
+          <div className="fridge-section-heading">
+            <span>01</span>
+            <h3>LIVE TELEMETRY</h3>
+          </div>
+
           <div className="gauge-container">
-            <div className="gauge">
+            <div className="gauge temperature-panel">
               <h4 className="fridge-subtitle">Temperature</h4>
               <TempGauge
                 value={fridge.reading_temperature}
@@ -45,7 +56,7 @@ function Fridge({ fridge }) {
               />
             </div>
 
-            <div className="gauge">
+            <div className="gauge humidity-panel">
               <h4 className="fridge-subtitle">Humidity</h4>
               <HumidityBar value={fridge.reading_humidity} />
             </div>
@@ -59,15 +70,12 @@ function Fridge({ fridge }) {
         >
           <div className="fridge-section-heading">
             <span>02</span>
-            <h3>CONFIGURATION</h3>
+            <h3>OPERATING LIMITS</h3>
           </div>
 
           <div className="form-grid">
-            <div className="form-field form-field-full">
-              <label
-                htmlFor={`min-temp-${fridge.fridge_id}`}
-                className="form-label"
-              >
+            <div className="form-field">
+              <label htmlFor={`min-temp-${fridge.fridge_id}`} className="form-label">
                 Minimum temperature (°C)
               </label>
               <input
@@ -75,16 +83,58 @@ function Fridge({ fridge }) {
                 step="any"
                 name="fridge_min_temperature"
                 id={`min-temp-${fridge.fridge_id}`}
-                defaultValue={fridge.fridge_min_temperature}
+                defaultValue={fridge.fridge_min_temperature ?? ""}
                 required
               />
             </div>
 
-            <input
-              type="submit"
-              id={`fridge-btn-${fridge.fridge_id}`}
-              value="Save configuration"
-            />
+            <div className="form-field">
+              <label htmlFor={`max-temp-${fridge.fridge_id}`} className="form-label">
+                Maximum temperature (°C)
+              </label>
+              <input
+                type="number"
+                step="any"
+                name="fridge_max_temperature"
+                id={`max-temp-${fridge.fridge_id}`}
+                defaultValue={fridge.fridge_max_temperature ?? ""}
+                required
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor={`min-humidity-${fridge.fridge_id}`} className="form-label">
+                Minimum humidity (%)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                name="fridge_min_humidity"
+                id={`min-humidity-${fridge.fridge_id}`}
+                defaultValue={fridge.fridge_min_humidity ?? ""}
+                required
+              />
+            </div>
+
+            <div className="form-field">
+              <label htmlFor={`max-humidity-${fridge.fridge_id}`} className="form-label">
+                Maximum humidity (%)
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                name="fridge_max_humidity"
+                id={`max-humidity-${fridge.fridge_id}`}
+                defaultValue={fridge.fridge_max_humidity ?? ""}
+                required
+              />
+            </div>
+
+            <button className="fridge-save-button" type="submit">
+              SAVE LIMITS
+            </button>
           </div>
         </form>
 
