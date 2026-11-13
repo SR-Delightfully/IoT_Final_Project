@@ -44,7 +44,7 @@ from models.product_model import (
 )
 from services.self_checkout import SelfCheckout
 from services.rfid_reader import RFIDReader
-from services.email_receipt import send_receipt_email lucas-test
+from services.email_receipt import send_receipt_email #lucas-test
 from services.breadboardCode import login
 
 if sys.platform == "win32":
@@ -125,21 +125,7 @@ class Server(BaseHTTPRequestHandler):
             return None
 
         return SESSIONS.get(parts[1])
-        # Allow product and stock changes only for logged-in administrators.
-    def require_admin(self):
-        user_id = self.get_logged_in_user_id()
-
-        if user_id is None:
-            self.send_json(401, {"error": "Please log in"})
-            return False
-
-        user = get_user(user_id)
-
-        if user is None or user["user_role"] != "admin":
-            self.send_json(403, {"error": "Administrator access required"})
-            return False
-
-        return True
+        
 
     def current_user(self):
         user_id = self.get_logged_in_user_id()
