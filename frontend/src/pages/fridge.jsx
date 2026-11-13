@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import TempGauge from "../components/TempGuage";
-import HumidityBar from "../components/HumidityBar";
 import Fan from "../components/Fan";
+import HumidityBar from "../components/HumidityBar";
+import TempGauge from "../components/TempGuage";
 
-const API = "http://localhost:5050";
+const API = import.meta.env.VITE_API_URL;
 const REFRESH_MS = 2000; // how often to pull new readings
 
 function FridgeCard({ fridge }) {
   // Fan state follows the database (fridge_fan_on) when the backend sends it,
   // so a YES email reply also shows up here.
   const serverFan =
-    fridge.fridge_fan_on === undefined ? null : fridge.fridge_fan_on ? "ON" : "OFF";
+    fridge.fridge_fan_on === undefined
+      ? null
+      : fridge.fridge_fan_on
+        ? "ON"
+        : "OFF";
   const [fanStatus, setFanStatus] = useState(serverFan ?? "OFF");
   const [fanBusy, setFanBusy] = useState(false);
 
@@ -84,7 +88,7 @@ function FridgeCard({ fridge }) {
             event.preventDefault();
 
             const minTemp = Number(
-              event.currentTarget.elements.fridge_min_temperature.value
+              event.currentTarget.elements.fridge_min_temperature.value,
             );
 
             try {
@@ -94,7 +98,7 @@ function FridgeCard({ fridge }) {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ min_temperature: minTemp }),
-                }
+                },
               );
 
               if (!response.ok) throw new Error("Save failed");

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Fridge from "../components/Fridge";
+import { useToast } from "../components/Toaster";
 import Header from "../layout/header";
 
 const API = "http://localhost:5050";
@@ -153,7 +154,12 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
   );
 }
 
+const CLOSED_ALERT_STATUSES = ["acknowledged", "resolved", "closed"];
+
 function FridgeDashboard() {
+  const toast = useToast();
+  // alert ids already seen, so only alerts that appear after the page loads pop up
+  const seenAlertIds = useRef(null);
   const [fridges, setFridges] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -190,7 +196,21 @@ function FridgeDashboard() {
       }
 
       if (alertResult.status === "fulfilled") {
-        setAlerts(normalizeList(alertResult.value, ["alerts", "data"]));
+        const alertList = normalizeList(alertResult.value, ["alerts", "data"]);
+
+        if (seenAlertIds.current) {
+          alertList
+            .filter((alert) => !seenAlertIds.current.has(alert.alert_id))
+            .filter((alert) => !CLOSED_ALERT_STATUSES.includes(String(alert.alert_status ?? "").toLowerCase()))
+            .forEach((alert) =>
+              toast.error(
+                `${alert.fridge_name || `Fridge ${alert.fridge_id}`}: ${alert.alert_message || alert.alert_type || "New alert"}`
+              )
+            );
+        }
+        seenAlertIds.current = new Set(alertList.map((alert) => alert.alert_id));
+
+        setAlerts(alertList);
         setAlertError("");
       } else {
         setAlertError("Alerts endpoint unavailable.");
@@ -216,7 +236,7 @@ function FridgeDashboard() {
       active = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [toast]);
 
   async function updateRecord(path, method, setBusyIds, id, body = {}) {
     setBusyIds((current) => [...current, id]);
@@ -258,8 +278,9 @@ function FridgeDashboard() {
             : alert
         )
       );
+      toast.success("Alert acknowledged.");
     } else {
-      window.alert("Could not acknowledge this alert.");
+      toast.error("Could not acknowledge this alert.");
     }
   }
 
@@ -284,7 +305,7 @@ function FridgeDashboard() {
         )
       );
     } else {
-      window.alert("Could not mark this notification as read.");
+      toast.error("Could not mark this notification as read.");
     }
   }
 

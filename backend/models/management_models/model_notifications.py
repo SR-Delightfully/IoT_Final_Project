@@ -15,7 +15,7 @@ def get_user_notifications(user_id):
             """
             SELECT * FROM Notifications
             WHERE user_id = ?
-            ORDER BY created_at DESC
+            ORDER BY notification_created_at DESC
             """,
             (user_id,)
         ).fetchall()
@@ -28,10 +28,10 @@ def add_notification(user_id, notification_type, title, summary,
         "user_id": user_id,
         "alert_id": alert_id,
         "notification_type": notification_type,
-        "title": title,
-        "summary": summary,
-        "brief_message": brief_message,
-        "full_message": full_message
+        "notification_title": title,
+        "notification_summary": summary,
+        "notification_message_brief": brief_message,
+        "notification_message_full": full_message
     })
 
 def update_notification(notification_id, values):

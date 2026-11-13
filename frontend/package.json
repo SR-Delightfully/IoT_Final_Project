@@ -12,7 +12,8 @@
   "dependencies": {
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.4.0"
+    "react-router": "^8.4.0",
+    "react-stripe-js": "^1.1.5"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
