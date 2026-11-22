@@ -17,7 +17,8 @@ def get_customer_points(customer_id):
 
 # Purchase history in the shape the account and purchases pages expect
 # (totals in cents, status in lowercase, one list of items per purchase).
-def get_customer_purchases(customer_id):
+#  start_date=None, end_date=None are optional for purchase during specific dates.
+def get_customer_purchases(customer_id,  start_date=None, end_date=None):
     with db_connection() as conn:
         purchases = conn.execute(
             """
@@ -39,17 +40,21 @@ def get_customer_purchases(customer_id):
             FROM Purchases p
             LEFT JOIN Receipts r ON r.purchase_id = p.purchase_id
             WHERE p.customer_id = ?
+            AND (? IS NULL OR DATE(p.purchase_created_at) >= ?)
+            AND (? IS NULL OR DATE(p.purchase_created_at) <= ?)
             ORDER BY p.purchase_created_at DESC, p.purchase_id DESC
             """,
-            (customer_id,)
+            (customer_id, start_date, start_date, end_date, end_date)
         ).fetchall()
 
         result = []
 
         for purchase in purchases:
+            #Include the product ID so reports can identify each product reliably
             items = conn.execute(
                 """
                 SELECT
+                    pi.product_id,
                     pr.product_name AS purchase_item_name,
                     pi.purchase_item_quantity,
                     pi.purchase_item_unit_price_cents AS purchase_item_unit_price

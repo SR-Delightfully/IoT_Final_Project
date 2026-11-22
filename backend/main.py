@@ -1,8 +1,10 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit, parse_qs
 import json
 import secrets
 import sqlite3
 import sys
+from datetime import date
 
 from models.database import init_db, DB_FILE
 from models.checkout_models.model_products import (
@@ -210,8 +212,11 @@ class Server(BaseHTTPRequestHandler):
     # ---------- GET ----------
 
     def do_GET(self):
-        path = self.path.split("?")[0].rstrip("/")
+        # Read the route before "?" and the date filters after "?" separately.
+        parsed_url = urlsplit(self.path)
+        path = parsed_url.path.rstrip("/")
         parts = path.strip("/").split("/")
+        query_params = parse_qs(parsed_url.query)
 
         # Public product catalogue (active products only)
         if path == "/products":
@@ -246,11 +251,46 @@ class Server(BaseHTTPRequestHandler):
             if customer is None:
                 self.send_json(404, {"error": "Customer account not found"})
                 return
+            # Read the selected dates, or use None when no filter was supplied.
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+            # Check supplied dates and convert them to YYYY-MM-DD.
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+            # The start date must come before or equal the end date.
+            if start_date is not None and end_date is not None:
+                if start_date > end_date:
+                    self.send_json(
+                        400,
+                        {"error": "Start date must be on or before end date."}
+                    )
+                    return
+            # Load the filtered purchases once for the response and spending total.
+            purchases = get_customer_purchases(
+                customer["customer_id"],
+                start_date,
+                end_date
+            )
+            # Add completed purchase totals, keeping the amount in cents.
+            total_spent_cents = 0
+
+            for purchase in purchases:
+                if purchase["purchase_payment_status"] == "paid":
+                    total_spent_cents += purchase["purchase_total"]
 
             self.send_json(200, {
                 "customer": customer,
                 "points": get_customer_points(customer["customer_id"]),
-                "purchases": get_customer_purchases(customer["customer_id"])
+                "purchases": purchases,
+                "total_spent_cents": total_spent_cents
             })
             return
 
