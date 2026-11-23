@@ -28,7 +28,7 @@ import Testing from "./pages/testing";
 import UserRoles from "./pages/userRoles";
 
 // COMPONENTS:
-import NavBar from "./components/NavBar";
+import NavBar from "./layout/navbar";
 import { ToastProvider } from "./components/Toaster";
 
 function AppContent() {
@@ -53,27 +53,17 @@ function AppContent() {
         {/* Store */}
         <Route path="/products" element={<Products />} />
         <Route path="/self-checkout" element={<SelfCheckout />} />
-        <Route path="/self-checkout/*" element={<Navigate to="/self-checkout" replace />} />
 
         {/* Customer account */}
-        <Route path="/account" element={<Account />} />
-        <Route path="/account/purchases" element={<Purchases />} />
-        <Route path="/account/purchase-history" element={<Navigate to="/account/purchases" replace />} />
-        <Route path="/account/membership" element={<Navigate to="/account" replace />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/customer" element={<Account />} />
+        <Route path="/customer/purchases" element={<Purchases />} />
+        <Route path="/customer/settings" element={<Settings />} />
 
         {/* Admin dashboard */}
-        <Route path="/dashboard" element={<Navigate to="/dashboard/inventory" replace />} />
+        <Route path="/dashboard" element={<p>Create overview of all dashboards(generalized stats)</p>} />
         <Route path="/dashboard/inventory" element={<ProductDashboard />} />
         <Route path="/dashboard/fridges" element={<FridgeDashboard />} />
-        <Route path="/dashboard/users" element={<UserRoles />} />
-
-        {/* Old addresses still work */}
-        <Route path="/admin/products" element={<Navigate to="/dashboard/inventory" replace />} />
-        <Route path="/admin/users" element={<Navigate to="/dashboard/users" replace />} />
-        <Route path="/fridges" element={<Navigate to="/dashboard/fridges" replace />} />
-
-        <Route path="/testing" element={<Testing />} />
+        {/* <Route path="/dashboard/users" element={<UserDashboard />} /> */}
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

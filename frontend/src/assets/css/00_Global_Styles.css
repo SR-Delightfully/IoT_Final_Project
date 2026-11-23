@@ -396,3 +396,124 @@ label > h5 {
 .page {
   margin: 0;
 }
+
+.nav-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: 4.5rem;
+  display: flex;
+  align-items: center;
+  gap: 2.25rem;
+  padding: 0.65rem 2.5rem;
+  background:
+    radial-gradient(ellipse at 15% 0%, var(--blue-4), transparent 55%),
+    linear-gradient(180deg, var(--blue-2), var(--blue-1));
+  border-bottom: 2px solid var(--gold-4);
+  box-shadow: 0 0.4rem 1.5rem var(--tone-0);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  color: var(--gold-7);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.18rem;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-brand::before {
+  content: "✧";
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  color: var(--gold-7);
+  font-size: 1.4rem;
+  border: 1px solid var(--gold-5);
+  background: linear-gradient(145deg, var(--blue-4), var(--blue-1));
+  box-shadow: inset 0 0 0 3px var(--blue-2);
+}
+
+.nav-links,
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-user {
+  margin-left: auto;
+  gap: 1.25rem;
+}
+
+.nav-link {
+  position: relative;
+  padding: 0.7rem 0.9rem;
+  color: var(--tone-8);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.07rem;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: all var(--transition-2);
+}
+
+.nav-link:hover {
+  color: var(--gold-8);
+  background: var(--blue-3);
+}
+
+.nav-link-active {
+  color: var(--gold-8);
+  background: linear-gradient(180deg, var(--blue-4), var(--blue-3));
+  box-shadow:
+    inset 0 -2px var(--gold-6),
+    0 2px 8px var(--tone-0);
+}
+
+.nav-link-active::before {
+  content: "✦";
+  margin-right: 0.4rem;
+  color: var(--gold-6);
+  font-size: 0.65rem;
+}
+
+.nav-greeting {
+  color: var(--gold-8);
+  font-size: 0.82rem;
+}
+
+.nav-badge {
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.4rem;
+  color: var(--blue-0);
+  background: var(--gold-7);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06rem;
+  text-transform: uppercase;
+}
+
+.nav-logout {
+  padding: 0.45rem 0.9rem;
+  color: var(--gold-7);
+  background: var(--blue-3);
+  border: 1px solid var(--gold-5);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-2);
+}
+
+.nav-logout:hover {
+  color: var(--blue-0);
+  background: var(--gold-7);
+  box-shadow: 0 0 12px var(--gold-3);
+}
