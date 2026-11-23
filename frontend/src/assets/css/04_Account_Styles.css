@@ -394,3 +394,30 @@
   color: var(--gold-7);
   font-size: 1.1rem;
 }
+/* Make calendar icons visible against the dark background. */
+.account-page input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 1;
+  cursor: pointer;
+}
+/* Display the two date fields side by side. */
+.purchase-date-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+/* Show white labels above the calendar inputs. */
+.purchase-date-filters label {
+  display: block;
+  color: #fff;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.account-page .purchase-filter-message {
+  margin-top: 20px;
+}
+.purchase-date-filters .react-datepicker__input-container input {
+  color: #fff;
+  caret-color: #fff;
+}
