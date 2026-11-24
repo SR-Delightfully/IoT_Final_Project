@@ -34,6 +34,13 @@ export function formatPrice(cents) {
 export function formatDate(timestamp) {
   return timestamp ? timestamp.split(" ")[0] : "";
 }
+// Display the purchase date and time as stored in the database.
+export function formatDateTime(timestamp) {
+  if (!timestamp) return "";
+
+  const [date, time] = timestamp.split(" ");
+  return time ? `${date} @ ${time.slice(0, 5)}` : date;
+}
 
 function csvCell(value) {
   const text = String(value ?? "");
