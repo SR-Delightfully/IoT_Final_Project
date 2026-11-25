@@ -147,6 +147,7 @@ INSERT OR IGNORE INTO Fridges (
     fridge_max_humidity
 ) VALUES
     (1, 'Fridge 1', 'Main Store - Display Area', 18, 24, 35, 55),
-    (2, 'Fridge 2', 'Backroom - Inventory Storage', 18, 22, 35, 50);
+    (2, 'Fridge 2', 'Backroom - Inventory Storage', 18, 22, 35, 50),
+    (3, 'Fridge 3', 'Backroom - Private Server', 18, 22, 35, 50);
 
 COMMIT;
