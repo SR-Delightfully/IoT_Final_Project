@@ -87,9 +87,9 @@ main.self-checkout {
   border-top: 0;
   background: linear-gradient(
     115deg,
-    var(--gold-1),
-    var(--gold-3) 50%,
-    var(--gold-1)
+    var(--gold-3),
+    var(--gold-5) 50%,
+    var(--gold-3)
   );
 }
 

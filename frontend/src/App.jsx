@@ -30,6 +30,7 @@ import UserRoles from "./pages/userRoles";
 // COMPONENTS:
 import NavBar from "./layout/navbar";
 import { ToastProvider } from "./components/Toaster";
+import UserDashboard from "./pages/userDashboard";
 
 function AppContent() {
   const location = useLocation();
@@ -63,7 +64,7 @@ function AppContent() {
         <Route path="/dashboard" element={<p>Create overview of all dashboards(generalized stats)</p>} />
         <Route path="/dashboard/inventory" element={<ProductDashboard />} />
         <Route path="/dashboard/fridges" element={<FridgeDashboard />} />
-        {/* <Route path="/dashboard/users" element={<UserDashboard />} /> */}
+        <Route path="/dashboard/users" element={<UserDashboard />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
