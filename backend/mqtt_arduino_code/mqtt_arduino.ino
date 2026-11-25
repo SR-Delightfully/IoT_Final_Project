@@ -17,13 +17,13 @@ DHT dht(DHT11PIN, DHT11);
 // Replace the next variables with your SSID/Password combination
 // const char* ssid = "REPLACE_WITH_YOUR_SSID";
 // const char* password = "REPLACE_WITH_YOUR_PASSWORD";
-const char* ssid = "Pixel_9154"; //"TP-Link_2AD8";
-const char* password = "DracoFoot2007?!";
+const char* ssid = ""; //"INSERT HERE";
+const char* password = ""; //"INSERT HERE"
 
 // Add your MQTT Broker IP address, example:
 //const char* mqtt_server = "192.168.1.144";
 //const char* mqtt_server = "YOUR_MQTT_BROKER_IP_ADDRESS";
-const char* mqtt_server = "10.108.22.132"; //"192.168.0.111";
+const char* mqtt_server = ""; //"INSERT HERE";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -146,7 +146,7 @@ void loop() {
 
   //humidity = bme.readHumidity();
     
-    // Convert the value to a char array
+  // Convert the value to a char array
   char humString[8];
   dtostrf(humi, 6, 2, humString);
   Serial.print("Humidity: ");
