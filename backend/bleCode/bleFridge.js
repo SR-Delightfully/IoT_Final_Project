@@ -37,12 +37,11 @@ barnowl.on('raddec', (raddec) => {
 
         try {
 
-            const decoded = advlibBLE.process(
-                packet,
-                BLE_LIBRARIES
-            );
+            const decoded = advlibBLE.process(packet, BLE_LIBRARIES);
 
             console.log("Sensor information:");
+            // console.log(raddec);
+            // console.log(decoded);
 
             console.log("Temperature: ", decoded.temperature);
 
