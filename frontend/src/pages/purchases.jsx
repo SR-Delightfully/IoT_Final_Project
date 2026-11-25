@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { downloadPurchasesCsv, fetchAccount, formatDateTime, formatPrice } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
+import ProductHistory from "../components/ProductHistory";
+import SpendingChart from "../components/SpendingChart";
 function Purchases() {
   const [purchases, setPurchases] = useState(null);
   const [error, setError] = useState("");
@@ -62,9 +64,10 @@ function Purchases() {
       .catch((err) => setError(err.message));
   }
   return (
-    <main className="account-page">
+    <main className="account-page purchase-report-page">
       <div className="account-card">
         <div className="account-card-body">
+
           <h1 className="account-title">Purchase History</h1>
           <div className="spending-section">
             <DateFilters
@@ -89,70 +92,96 @@ function Purchases() {
             </p>
           ) : (
             <>
-              <div className="purchases-header">
-                <p className="points-next">
-                  {purchases.length} purchase{purchases.length === 1 ? "" : "s"}
-                </p>
-                {purchases.length > 0 && (
-                  <button
-                    type="button"
-                    className="account-button"
-                    onClick={() => downloadPurchasesCsv(purchases)}
-                  >
-                    Download CSV
-                  </button>
-                )}
-              </div>
+              <div className="purchase-report-columns">
+                <div className="account-section">
+                  <h2 className="account-section-title">Spending History</h2>
 
-              {purchases.length === 0 ? (
-                <p className="points-next">No purchases yet.</p>
-              ) : (
-                <div className="purchase-list">
-                  {purchases.map((p) => (
-                    <article key={p.purchase_id} className="purchase-card">
-                      <div className="purchase-card-top">
-                        <span className="purchase-receipt">{p.receipt_number}</span>
-                        <span>{formatDateTime(p.purchase_created_at)}</span>
-                      </div>
+                  <div className="points-stat">
+                    <span className="form-label">Total Spent</span>
+                    <span className="points-value">
+                      {formatPrice(
+                        purchases
+                          .filter((purchase) => purchase.purchase_payment_status === "paid")
+                          .reduce((total, purchase) => total + purchase.purchase_total, 0)
+                      )}
+                    </span>
+                  </div>
 
-                      <ul className="purchase-items">
-                        {p.items.length === 0 ? (
-                          <li>-</li>
-                        ) : (
-                          p.items.map((item, i) => (
-                            <li key={i}>
-                              <span>
-                                {item.purchase_item_name} x{item.purchase_item_quantity}
-                              </span>
-                              <span>
-                                {formatPrice(item.purchase_item_unit_price * item.purchase_item_quantity)}
-                              </span>
-                            </li>
-                          ))
-                        )}
-                      </ul>
-
-                      <div className="purchase-card-bottom">
-                        <span
-                          className={`history-status history-status-${p.purchase_payment_status}`}
-                        >
-                          {p.purchase_payment_status}
-                        </span>
-                        <span className="history-points">+{p.purchase_points_earned} pts</span>
-                        <span className="purchase-total">{formatPrice(p.purchase_total)}</span>
-                      </div>
-                    </article>
-                  ))}
+                  <SpendingChart purchases={purchases} />
                 </div>
-              )}
+
+                <div className="account-section">
+                  <h2 className="account-section-title">Purchase History</h2>
+                  <div className="purchases-header">
+                    <p className="points-next">
+                      {purchases.length} purchase{purchases.length === 1 ? "" : "s"}
+                    </p>
+                    {purchases.length > 0 && (
+                      <button
+                        type="button"
+                        className="account-button"
+                        onClick={() => downloadPurchasesCsv(purchases)}
+                      >
+                        Download CSV
+                      </button>
+                    )}
+                  </div>
+
+                  {purchases.length === 0 ? (
+                    <p className="points-next">No purchases yet.</p>
+                  ) : (
+                    <div className="purchase-list">
+                      {purchases.map((p) => (
+                        <article key={p.purchase_id} className="purchase-card">
+                          <div className="purchase-card-top">
+                            <span className="purchase-receipt">{p.receipt_number}</span>
+                            <span>{formatDateTime(p.purchase_created_at)}</span>
+                          </div>
+
+                          <ul className="purchase-items">
+                            {p.items.length === 0 ? (
+                              <li>-</li>
+                            ) : (
+                              p.items.map((item, i) => (
+                                <li key={i}>
+                                  <span>
+                                    {item.purchase_item_name} x{item.purchase_item_quantity}
+                                  </span>
+                                  <span>
+                                    {formatPrice(item.purchase_item_unit_price * item.purchase_item_quantity)}
+                                  </span>
+                                </li>
+                              ))
+                            )}
+                          </ul>
+
+                          <div className="purchase-card-bottom">
+                            <span
+                              className={`history-status history-status-${p.purchase_payment_status}`}
+                            >
+                              {p.purchase_payment_status}
+                            </span>
+                            <span className="history-points">+{p.purchase_points_earned} pts</span>
+                            <span className="purchase-total">{formatPrice(p.purchase_total)}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <ProductHistory />
+
             </>
           )}
         </div>
       </div>
+
       <div className="account-links">
         <a href="/account">Back to account</a>
       </div>
-    </main>
+    </main >
   );
 }
+
 export default Purchases;

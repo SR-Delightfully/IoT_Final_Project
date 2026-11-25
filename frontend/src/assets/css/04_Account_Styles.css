@@ -409,7 +409,7 @@
 /* Show white labels above the calendar inputs. */
 .purchase-date-filters label {
   display: block;
-  color: #fff;
+  color: white;
   margin-bottom: 8px;
   font-weight: 600;
 }
@@ -418,8 +418,8 @@
   margin-top: 20px;
 }
 .purchase-date-filters .react-datepicker__input-container input {
-  color: #fff;
-  caret-color: #fff;
+  color:white;
+  caret-color: white;
 }
 .spending-section .purchase-date-filters {
   max-width: 560px;
@@ -444,4 +444,64 @@
 .history-table th:nth-child(2),
 .history-table td:nth-child(2) {
   white-space: nowrap;
+}
+.product-history-section label,
+.product-history-section input,
+.product-history-section .purchase-items {
+  color: white;
+}
+
+.product-history-section input {
+  caret-color: white;
+}
+
+.product-history-section input::placeholder {
+  color: #bbb;
+}
+.product-history-section .form-field label {
+  display: block;
+  position: static;
+  margin-bottom: 8px;
+}
+/* Give the reporting page enough width for both histories. */
+.account-page.purchase-report-page {
+  width: calc(100% - 32px);
+  max-width: 1440px;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+.purchase-report-page .account-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* Receipts on the left, product history on the right. */
+.purchase-report-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.purchase-report-columns > * {
+  min-width: 0;
+}
+
+.purchase-report-columns > .account-section {
+  margin-top: 0;
+}
+
+/* Stack the histories on smaller screens. */
+@media (max-width: 1000px) {
+  .purchase-report-columns {
+    grid-template-columns: 1fr;
+  }
+}
+/* Scroll receipts when the list grows too long. */
+.purchase-report-columns .purchase-list {
+  max-height: 450px;
+  overflow-y: auto;
+  padding-right: 8px;
 }

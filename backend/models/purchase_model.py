@@ -71,3 +71,34 @@ def get_customer_purchases(customer_id,  start_date=None, end_date=None):
             result.append(data)
 
         return result
+
+# Get a customer's past purchases of one product, using prices paid at the time.
+def get_customer_product_history(customer_id, product_id, start_date=None, end_date=None):
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                p.purchase_id,
+                p.purchase_created_at,
+                pi.product_id,
+                pr.product_name,
+                pi.purchase_item_quantity,
+                pi.purchase_item_unit_price_cents
+            FROM Purchases p
+            JOIN PurchaseItems pi ON pi.purchase_id = p.purchase_id
+            JOIN Products pr ON pr.product_id = pi.product_id
+            WHERE p.customer_id = ?
+              AND pi.product_id = ?
+              AND p.purchase_status = 'COMPLETED'
+              AND (? IS NULL OR DATE(p.purchase_created_at) >= ?)
+              AND (? IS NULL OR DATE(p.purchase_created_at) <= ?)
+            ORDER BY p.purchase_created_at, p.purchase_id, pi.purchase_item_id
+            """,
+            (
+                customer_id, product_id,
+                start_date, start_date,
+                end_date, end_date
+            )
+        ).fetchall()
+
+        return [dict(row) for row in rows]

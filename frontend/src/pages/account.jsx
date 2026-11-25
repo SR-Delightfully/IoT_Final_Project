@@ -7,6 +7,7 @@ import {
 } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
 
+
 const TIERS = [
   { name: "Bronze", min: 0 },
   { name: "Silver", min: 500 },
@@ -156,7 +157,7 @@ function Account() {
             </p>
           </section>
           <section className="account-section spending-section">
-            <h2 className="account-section-title">Spending History</h2>
+            <h2 className="account-section-title">Spending Summary</h2>
 
             <DateFilters
               startDate={startDate}
@@ -183,6 +184,8 @@ function Account() {
               <span className="form-label">Total Spent</span>
               <span className="points-value">{formatPrice(totalSpent)}</span>
             </div>
+            
+            
           </section>
 
           <section className="account-section">

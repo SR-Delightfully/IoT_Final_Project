@@ -91,3 +91,21 @@ export function downloadPurchasesCsv(purchases) {
   link.click();
   URL.revokeObjectURL(url);
 }
+export async function fetchProductHistory(productId, startDate = "", endDate = "") {
+  const params = new URLSearchParams({ product_id: productId });
+
+  if (startDate) params.set("start_date", startDate);
+  if (endDate) params.set("end_date", endDate);
+
+  const res = await fetch(`${API}/me/account/product-history?${params}`, {
+    headers: authHeaders(),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Could not load product history");
+  }
+
+  return data;
+}

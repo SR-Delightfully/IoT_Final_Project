@@ -35,7 +35,7 @@ from models.user_model import (
     update_user_name,
     change_password
 )
-from models.purchase_model import get_customer_points, get_customer_purchases
+from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history
 from models.product_model import (
     get_active_products,
     get_all_products,
@@ -233,15 +233,15 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(200, get_all_products())
             return
 
-        # The logged-in user's own details (used by the nav bar and settings page)
+        # The logged-in user's details for the nav bar and settings page.
         if path == "/me":
             user = self.require_user()
             if user:
                 self.send_json(200, self.user_details(user))
             return
 
-        # Account page: customer info, loyalty points and purchase history
-        if path == "/me/account":
+        # Both routes share login, customer lookup and date validation.
+        if path in ("/me/account", "/me/account/product-history"):
             user = self.require_user()
             if not user:
                 return
@@ -251,10 +251,10 @@ class Server(BaseHTTPRequestHandler):
             if customer is None:
                 self.send_json(404, {"error": "Customer account not found"})
                 return
-            # Read the selected dates, or use None when no filter was supplied.
+
             start_date = query_params.get("start_date", [None])[0]
             end_date = query_params.get("end_date", [None])[0]
-            # Check supplied dates and convert them to YYYY-MM-DD.
+
             try:
                 if start_date is not None:
                     start_date = date.fromisoformat(start_date).isoformat()
@@ -265,7 +265,7 @@ class Server(BaseHTTPRequestHandler):
             except ValueError:
                 self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
                 return
-            # The start date must come before or equal the end date.
+
             if start_date is not None and end_date is not None:
                 if start_date > end_date:
                     self.send_json(
@@ -273,13 +273,44 @@ class Server(BaseHTTPRequestHandler):
                         {"error": "Start date must be on or before end date."}
                     )
                     return
-            # Load the filtered purchases once for the response and spending total.
+
+            # Product history runs after the customer and dates are known.
+            if path == "/me/account/product-history":
+                try:
+                    product_id = int(query_params.get("product_id", [""])[0])
+                    if product_id <= 0:
+                        raise ValueError
+                except ValueError:
+                    self.send_json(400, {"error": "A valid product_id is required"})
+                    return
+
+                history = get_customer_product_history(
+                    customer["customer_id"],
+                    product_id,
+                    start_date,
+                    end_date
+                )
+
+                purchase_count = len({item["purchase_id"] for item in history})
+                total_quantity = sum(
+                    item["purchase_item_quantity"] for item in history
+                )
+
+                self.send_json(200, {
+                    "product_id": product_id,
+                    "purchase_count": purchase_count,
+                    "total_quantity": total_quantity,
+                    "history": history
+                })
+                return
+
+            # Account history and spending total.
             purchases = get_customer_purchases(
                 customer["customer_id"],
                 start_date,
                 end_date
             )
-            # Add completed purchase totals, keeping the amount in cents.
+
             total_spent_cents = 0
 
             for purchase in purchases:
