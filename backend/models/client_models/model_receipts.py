@@ -35,9 +35,16 @@ def delete_receipt(receipt_id):
 def get_customer_receipt(customer_id, purchase_id):
     with db_connection() as conn:
         receipt = conn.execute(
+            # Include points earned from this purchase's loyalty records.
             """
             SELECT p.*, r.receipt_id, r.receipt_number,
-                   r.receipt_created_at
+                   r.receipt_created_at,
+                   COALESCE((
+                       SELECT SUM(lt.loyalty_points_change)
+                       FROM LoyaltyTransactions lt
+                       WHERE lt.purchase_id = p.purchase_id
+                         AND lt.loyalty_transaction_type = 'EARN'
+                   ), 0) AS points_earned
             FROM Purchases p
             JOIN Receipts r ON p.purchase_id = r.purchase_id
             WHERE p.customer_id = ?

@@ -5,6 +5,8 @@ import {
   formatDate,
   formatPrice,
 } from "../utils/purchases";
+import DateFilters from "../components/DateFilters";
+
 
 const TIERS = [
   { name: "Bronze", min: 0 },
@@ -34,12 +36,55 @@ function getTierInfo(points) {
 function Account() {
   const [account, setAccount] = useState(null);
   const [error, setError] = useState("");
-
+  // Store the dates selected for the spending report.
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [filterError, setFilterError] = useState("");
   useEffect(() => {
     fetchAccount()
       .then(setAccount)
       .catch((err) => setError(err.message));
   }, []);
+  function applyFilters() {
+    setFilterError("");
+    // Check that typed dates match dates accepted by the calendars.
+    for (const [inputId, selectedDate] of [
+      ["start-date", startDate],
+      ["end-date", endDate],
+    ]) {
+      const inputValue = document.getElementById(inputId).value;
+      const typedDate =
+        inputValue === "yyyy-mm-dd" || inputValue.trim() === ""
+          ? ""
+          : inputValue;
+
+      if (
+        (typedDate && !/^\d{4}-\d{2}-\d{2}$/.test(typedDate)) ||
+        typedDate !== selectedDate
+      ) {
+        setFilterError("Enter a valid date in YYYY-MM-DD format, or clear the field.");
+        return;
+      }
+
+      if (
+        selectedDate &&
+        (selectedDate < "1950-01-01" ||
+          new Date(`${selectedDate}T00:00:00`) > new Date())
+      ) {
+        setFilterError("Dates must be between 1950-01-01 and today.");
+        return;
+      }
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      setFilterError("Start date must be on or before end date.");
+      return;
+    }
+
+    fetchAccount(startDate, endDate)
+      .then(setAccount)
+      .catch((err) => setFilterError(err.message));
+  }
 
   if (error || !account) {
     return (
@@ -60,9 +105,8 @@ function Account() {
   const points = account.points || 0;
   const { current, next, progress } = getTierInfo(points);
 
-  const totalSpent = purchases
-    .filter((p) => p.purchase_payment_status === "paid")
-    .reduce((sum, p) => sum + p.purchase_total, 0);
+  // Use the spending total calculated by the backend.
+  const totalSpent = account.total_spent_cents;
 
   return (
     <main className="account-page">
@@ -87,7 +131,6 @@ function Account() {
 
           <section className="account-section">
             <h2 className="account-section-title">Account Points</h2>
-
             <div className="points-summary">
               <div className="points-stat">
                 <span className="form-label">Points</span>
@@ -97,11 +140,6 @@ function Account() {
               <div className="points-stat">
                 <span className="form-label">Tier</span>
                 <span className="points-value">{current.name}</span>
-              </div>
-
-              <div className="points-stat">
-                <span className="form-label">Total Spent</span>
-                <span className="points-value">{formatPrice(totalSpent)}</span>
               </div>
             </div>
 
@@ -117,6 +155,37 @@ function Account() {
                 ? `${(next.min - points).toLocaleString()} points until ${next.name}`
                 : "You have reached the highest tier!"}
             </p>
+          </section>
+          <section className="account-section spending-section">
+            <h2 className="account-section-title">Spending Summary</h2>
+
+            <DateFilters
+              startDate={startDate}
+              endDate={endDate}
+              setStartDate={setStartDate}
+              setEndDate={setEndDate}
+            />
+
+            <button
+              type="button"
+              className="account-button spending-filter-button"
+              onClick={applyFilters}
+            >
+              Apply filters
+            </button>
+
+            {filterError && (
+              <p className="account-subtitle purchase-filter-message">
+                <i>{filterError}</i>
+              </p>
+            )}
+
+            <div className="points-stat">
+              <span className="form-label">Total Spent</span>
+              <span className="points-value">{formatPrice(totalSpent)}</span>
+            </div>
+            
+            
           </section>
 
           <section className="account-section">
@@ -146,11 +215,11 @@ function Account() {
                           {p.items.length === 0
                             ? "-"
                             : p.items
-                                .map(
-                                  (item) =>
-                                    `${item.purchase_item_name} x${item.purchase_item_quantity}`,
-                                )
-                                .join(", ")}
+                              .map(
+                                (item) =>
+                                  `${item.purchase_item_name} x${item.purchase_item_quantity}`,
+                              )
+                              .join(", ")}
                         </td>
                         <td
                           className={`history-status history-status-${p.purchase_payment_status}`}

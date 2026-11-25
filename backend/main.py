@@ -1,8 +1,10 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit, parse_qs
 import json
 import secrets
 import sqlite3
 import sys
+from datetime import date
 
 from models.database import init_db, DB_FILE, get_connection
 from models.checkout_models.model_products import (
@@ -23,6 +25,8 @@ from models.management_models.model_readings import get_latest_reading
 from models.management_models.model_alerts import get_all_alerts
 from models.management_models.model_notifications import get_user_notifications
 from models.management_models.model_stock_receipts import add_stock_receipt
+
+# Merge conflict 2 nov 13 : keep dashboard/account functions, checkout services and receipt emailing.
 from models.user_model import (
     get_user,
     get_all_users,
@@ -31,7 +35,7 @@ from models.user_model import (
     update_user_name,
     change_password
 )
-from models.purchase_model import get_customer_points, get_customer_purchases
+from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history
 from models.product_model import (
     get_active_products,
     get_all_products,
@@ -42,6 +46,7 @@ from models.product_model import (
 )
 from services.self_checkout import SelfCheckout
 from services.rfid_reader import RFIDReader
+from services.email_receipt import send_receipt_email 
 from services.breadboardCode import login
 
 if sys.platform == "win32":
@@ -122,6 +127,7 @@ class Server(BaseHTTPRequestHandler):
             return None
 
         return SESSIONS.get(parts[1])
+        
 
     def current_user(self):
         user_id = self.get_logged_in_user_id()
@@ -206,8 +212,11 @@ class Server(BaseHTTPRequestHandler):
     # ---------- GET ----------
 
     def do_GET(self):
-        path = self.path.split("?")[0].rstrip("/")
+        # Read the route before "?" and the date filters after "?" separately.
+        parsed_url = urlsplit(self.path)
+        path = parsed_url.path.rstrip("/")
         parts = path.strip("/").split("/")
+        query_params = parse_qs(parsed_url.query)
 
         # Public product catalogue (active products only)
         if path == "/products":
@@ -267,8 +276,8 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(200, self.user_details(user))
             return
 
-        # Account page: customer info, loyalty points and purchase history
-        if path == "/me/account":
+        # Both routes share login, customer lookup and date validation.
+        if path in ("/me/account", "/me/account/product-history"):
             user = self.require_user()
             if not user:
                 return
@@ -279,10 +288,76 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Customer account not found"})
                 return
 
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+
+            if start_date is not None and end_date is not None:
+                if start_date > end_date:
+                    self.send_json(
+                        400,
+                        {"error": "Start date must be on or before end date."}
+                    )
+                    return
+
+            # Product history runs after the customer and dates are known.
+            if path == "/me/account/product-history":
+                try:
+                    product_id = int(query_params.get("product_id", [""])[0])
+                    if product_id <= 0:
+                        raise ValueError
+                except ValueError:
+                    self.send_json(400, {"error": "A valid product_id is required"})
+                    return
+
+                history = get_customer_product_history(
+                    customer["customer_id"],
+                    product_id,
+                    start_date,
+                    end_date
+                )
+
+                purchase_count = len({item["purchase_id"] for item in history})
+                total_quantity = sum(
+                    item["purchase_item_quantity"] for item in history
+                )
+
+                self.send_json(200, {
+                    "product_id": product_id,
+                    "purchase_count": purchase_count,
+                    "total_quantity": total_quantity,
+                    "history": history
+                })
+                return
+
+            # Account history and spending total.
+            purchases = get_customer_purchases(
+                customer["customer_id"],
+                start_date,
+                end_date
+            )
+
+            total_spent_cents = 0
+
+            for purchase in purchases:
+                if purchase["purchase_payment_status"] == "paid":
+                    total_spent_cents += purchase["purchase_total"]
+
             self.send_json(200, {
                 "customer": customer,
                 "points": get_customer_points(customer["customer_id"]),
-                "purchases": get_customer_purchases(customer["customer_id"])
+                "purchases": purchases,
+                "total_spent_cents": total_spent_cents
             })
             return
 
@@ -451,8 +526,14 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if len(parts) == 2 and parts[0] == "products":
-            self.replace_product(parts[1])
+
+            # Merge: keep admin protection and reuse the product-update helper.
+            if not self.require_admin():
+                return
+
+            self.replace_product(parts[1]) #lucas-test
             return
+            
 
         if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "threshold":
             self.update_threshold(parts[1])
@@ -698,7 +779,73 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if path == "/checkout":
-            self.complete_checkout()
+    # Merge: preserve token-based checkout and automatic receipt emailing.
+            try:
+                data = self.read_json()
+
+                session_id = data.get("session_id")
+                # Identify the customer from their login token. Without a token, complete the purchase as a guest.
+                customer_id = None
+
+                if self.headers.get("Authorization"):
+                    user_id = self.get_logged_in_user_id()
+
+                    if user_id is None:
+                        self.send_json(401, {"error": "Please log in again"})
+                        return
+
+                    customer = get_customer_by_user_id(user_id)
+
+                    if customer is None:
+                        self.send_json(404, {"error": "Customer account not found"})
+                        return
+
+                    customer_id = customer["customer_id"]
+                payment_method = data.get("payment_method", "card")
+
+                if type(session_id) is not int or session_id <= 0:
+                    self.send_json(400, {"error": "A valid session_id is required"})
+                    return
+
+                if customer_id is not None and (type(customer_id) is not int or customer_id <= 0):
+                    self.send_json(400, {"error": "Invalid customer ID"})
+                    return
+
+                receipt = self.checkout.complete_purchase(
+                    session_id,
+                    customer_id=customer_id,
+                    payment_method=payment_method
+                )
+
+                #After purchase it sends an email using customer token
+                if not receipt:
+                    self.send_json(400, {"error": "Could not complete this purchase"})
+                else:
+                    receipt["email_status"] = "not_applicable"
+
+                    # Email registered customers after the purchase is saved.
+                    if customer_id is not None:
+                        try:
+                            send_receipt_email(
+                                customer["user_email"],
+                                receipt
+                            )
+                            receipt["email_status"] = "sent"
+                        except Exception as error:
+                            print(f"Receipt email error: {error}")
+                            receipt["email_status"] = "failed"
+
+                    self.send_json(201, receipt)
+
+            except (ValueError, json.JSONDecodeError) as error:
+                self.send_json(400, {"error": str(error) or "Invalid checkout request"})
+            except sqlite3.IntegrityError as error:
+                print(f"Checkout database error: {error}")
+                self.send_json(409, {"error": "Could not complete this purchase"})
+            except Exception as error:
+                print(f"Checkout error: {error}")
+                self.send_json(500, {"error": "Could not complete checkout"})
+
             return
 
         self.send_json(404, {"error": "Route not found"})
@@ -1104,6 +1251,10 @@ class Server(BaseHTTPRequestHandler):
 
     # Create a product with its category and barcode
     def create_product(self):
+        # Merge: preserve administrator protection.
+        if not self.require_admin():
+            return
+
         data = self.read_json_or_400()
         if data is None:
             return
@@ -1142,6 +1293,9 @@ class Server(BaseHTTPRequestHandler):
 
     # Record a delivery and increase the product's stock
     def receive_stock(self):
+        # Merge: preserve administrator protection.
+        if not self.require_admin():
+            return
         data = self.read_json_or_400()
         if data is None:
             return
@@ -1341,6 +1495,9 @@ class Server(BaseHTTPRequestHandler):
 
         # Hide the product without deleting its database record.
         if len(parts) == 2 and parts[0] == "products":
+            # Merge: preserve administrator protection.
+            if not self.require_admin():
+                return
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid product ID"})
                 return
