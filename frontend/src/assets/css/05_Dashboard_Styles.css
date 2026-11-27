@@ -1475,7 +1475,7 @@ html {
 /* Totals and graph left; product reports right. */
 .sales-report-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
 }
@@ -1543,4 +1543,90 @@ html {
     min-width: 0;
     min-height: 0;
     height: auto;
+}
+
+
+
+
+
+.dashboard-form.inventory-filters {
+  margin-top: -12px;
+}
+/* Rankings span both upper columns. */
+.sales-rankings {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.sales-reports-page .sales-ranking-filter {
+  width: 220px;
+  max-width: 100%;
+  margin: 0 auto 16px;
+  text-align: center;
+}
+
+.sales-ranking-filter select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sales-ranking-tables {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.sales-ranking-tables > .account-section {
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 1000px) {
+  .sales-ranking-tables {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Share rows so both panels start and end together. */
+.sales-report-overview,
+.sales-report-products {
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: 1 / span 3;
+  align-self: stretch;
+}
+
+.sales-report-overview {
+  grid-column: 1;
+}
+
+.sales-report-products {
+  grid-column: 2;
+}
+
+.sales-report-overview > .points-summary {
+  grid-row: span 2;
+  align-self: start;
+}
+
+.sales-report-overview > .account-section,
+.sales-report-products > .account-section {
+  margin: 0;
+  align-self: stretch;
+}
+
+/* Keep the stacked layout on smaller screens. */
+@media (max-width: 1000px) {
+  .sales-report-overview,
+  .sales-report-products {
+    display: block;
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .sales-report-overview > .account-section,
+  .sales-report-products > .account-section {
+    margin-top: 16px;
+  }
 }

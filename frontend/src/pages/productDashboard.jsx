@@ -729,7 +729,7 @@ function ProductDashboard() {
                         <th>Status</th>
                         <th />
                       </tr>
-                    </thead>colSpan={9}
+                    </thead>
                     <tbody>
                       {filteredProducts.length === 0 && (
                         <tr>
@@ -739,7 +739,7 @@ function ProductDashboard() {
                       {filteredProducts.map((p) =>
                         editingId === p.product_id ? (
                           <tr key={p.product_id}>
-                            <td colSpan={10}>
+                            <td colSpan={9}>
                               <ProductForm
                                 form={editForm}
                                 onChange={setEditForm}

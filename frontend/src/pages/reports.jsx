@@ -175,6 +175,9 @@ function Reports() {
                                     title="Units Sold by Product"
                                     products={products}
                                 />
+                            </div>
+
+                            <div className="sales-rankings">
                                 <div className="form-field sales-ranking-filter">
                                     <label htmlFor="sales-ranking-count">Products per ranking</label>
                                     <select
@@ -190,8 +193,10 @@ function Reports() {
                                     </select>
                                 </div>
 
-                                <SalesTable title="Most Sold Products" products={mostSold} />
-                                <SalesTable title="Least Sold Products" products={leastSold} />
+                                <div className="sales-ranking-tables">
+                                    <SalesTable title="Most Sold Products" products={mostSold} />
+                                    <SalesTable title="Least Sold Products" products={leastSold} />
+                                </div>
                             </div>
                         </div>
                     )}
