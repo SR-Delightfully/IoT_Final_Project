@@ -32,7 +32,14 @@ PRODUCT_QUERY = """
             WHERE pi.product_id = p.product_id
               AND pu.purchase_status = 'COMPLETED'
         ), 0) AS total_sold,
-        p.product_created_at
+                p.product_created_at,
+        (
+            SELECT MAX(sr.stock_receipt_date)
+            FROM StockReceiptItems sri
+            JOIN StockReceipts sr
+                ON sr.stock_receipt_id = sri.stock_receipt_id
+            WHERE sri.product_id = p.product_id
+        ) AS last_restocked
     FROM Products p
     LEFT JOIN Categories c ON c.category_id = p.category_id
     LEFT JOIN BarCodes b ON b.barcode_id = (

@@ -574,6 +574,7 @@ class SelfCheckout:
                 "qst": qst / 100,
                 "discount": discount / 100,
                 "total": total / 100,
+                "payment_method": payment_method,
                 "loyalty_points_earned": points_earned,
                 "loyalty_points_balance": points_balance
             })

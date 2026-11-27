@@ -26,6 +26,7 @@ import SelfCheckout from "./pages/selfCheckout";
 import Settings from "./pages/settings";
 import Testing from "./pages/testing";
 import UserRoles from "./pages/userRoles";
+import Reports from "./pages/reports";
 
 // COMPONENTS:
 import NavBar from "./layout/navbar";
@@ -63,6 +64,7 @@ function AppContent() {
         {/* Admin dashboard */}
         <Route path="/dashboard" element={<p>Create overview of all dashboards(generalized stats)</p>} />
         <Route path="/dashboard/inventory" element={<ProductDashboard />} />
+        <Route path="/dashboard/reports" element={<Reports />} />
         <Route path="/dashboard/fridges" element={<FridgeDashboard />} />
         <Route path="/dashboard/users" element={<UserDashboard />} />
 

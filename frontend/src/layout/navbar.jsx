@@ -166,6 +166,7 @@ function NavBar() {
                     <div className="nav-links">
                         {link("/dashboard", "Overview")}
                         {link("/dashboard/inventory", "Inventory")}
+                        {isAdmin && link("/dashboard/reports", "Sales Reports")}
                         {link("/dashboard/fridges", "Fridges")}
                         {isAdmin && link("/dashboard/users", "Users")}
                     </div>

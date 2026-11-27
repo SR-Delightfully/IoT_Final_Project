@@ -25,6 +25,12 @@ from models.management_models.model_readings import get_latest_reading
 from models.management_models.model_alerts import get_all_alerts
 from models.management_models.model_notifications import get_user_notifications
 from models.management_models.model_stock_receipts import add_stock_receipt
+from models.report_model import (
+    get_inventory_report,
+    get_sales_total,
+    get_product_sales,
+    get_daily_sales
+)
 
 # Merge conflict 2 nov 13 : keep dashboard/account functions, checkout services and receipt emailing.
 from models.user_model import (
@@ -232,7 +238,57 @@ class Server(BaseHTTPRequestHandler):
             if self.require_admin():
                 self.send_json(200, get_all_products())
             return
+        # Inventory report: admin only.
+        if path == "/admin/reports/inventory":
+            if not self.require_admin():
+                return
 
+            try:
+                report = get_inventory_report()
+                self.send_json(200, report)
+            except sqlite3.Error as error:
+                print(f"Inventory report error: {error}")
+                self.send_json(500, {"error": "Could not load inventory report"})
+
+            return
+        # Sales report admin only.
+        if path == "/admin/reports/sales":
+            if not self.require_admin():
+                return
+
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+
+            if start_date and end_date and start_date > end_date:
+                self.send_json(400, {"error": "Start date must be on or before end date."})
+                return
+
+            try:
+                products = get_product_sales(start_date, end_date)
+
+                self.send_json(200, {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "total_sales_cents": get_sales_total(start_date, end_date),
+                    "total_units_sold": sum(p["units_sold"] for p in products),
+                    "products": products,
+                    "daily_sales": get_daily_sales(start_date, end_date)
+                })
+            except sqlite3.Error as error:
+                print(f"Sales report error: {error}")
+                self.send_json(500, {"error": "Could not load sales report"})
+
+            return
         # Active loyalty rewards for the signed-in customer.
         if path == "/loyalty/rewards":
             user = self.require_user()

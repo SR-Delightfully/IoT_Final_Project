@@ -12,10 +12,8 @@ html {
 
 .dashboard-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(
-      0,
-      1fr
-    );
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0,
+      1fr);
   grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
     "title title stats stats"
@@ -32,14 +30,14 @@ html {
   align-content: stretch;
 }
 
-.dashboard-page > .fridge-page-header {
+.dashboard-page>.fridge-page-header {
   grid-area: title;
   align-self: center;
   margin: 0;
   padding: 0.25rem 0.4rem;
 }
 
-.dashboard-page > .fridge-page-header h1 {
+.dashboard-page>.fridge-page-header h1 {
   margin: 0.25rem 0;
 
   font-size: clamp(1.35rem, 2vw, 2rem);
@@ -49,7 +47,7 @@ html {
   overflow-wrap: anywhere;
 }
 
-.dashboard-page > .fridge-page-header p {
+.dashboard-page>.fridge-page-header p {
   margin: 0.25rem 0;
 
   font-size: 0.8rem;
@@ -127,7 +125,7 @@ html {
   border-color: #f0a04b;
 }
 
-.dashboard-page > .dashboard-panel {
+.dashboard-page>.dashboard-panel {
   display: flex;
 
   flex-direction: column;
@@ -151,17 +149,17 @@ html {
   color: var(--text-color, #f3ead5);
 }
 
-.dashboard-page > #alerts {
+.dashboard-page>#alerts {
   grid-area: alerts;
   min-height: 0;
 }
 
-.dashboard-page > #notifications {
+.dashboard-page>#notifications {
   grid-area: notifications;
   min-height: 0;
 }
 
-.dashboard-page > #fridges {
+.dashboard-page>#fridges {
   grid-area: fridges;
   min-height: 0;
 }
@@ -296,7 +294,7 @@ html {
   overflow-wrap: anywhere;
 }
 
-.dashboard-list-content > span,
+.dashboard-list-content>span,
 .dashboard-list-content time {
   color: var(--muted, #a7afbd);
 
@@ -361,14 +359,12 @@ html {
   top: 15%;
   left: 50%;
   transform: translate(-50%, -15%);
-  background: linear-gradient(
-    45deg,
-    var(--gold-5) 0%,
-    var(--gold-8) 5%,
-    var(--gold-5) 4%,
-    var(--gold-8) 95%,
-    var(--gold-7) 94%
-  );
+  background: linear-gradient(45deg,
+      var(--gold-5) 0%,
+      var(--gold-8) 5%,
+      var(--gold-5) 4%,
+      var(--gold-8) 95%,
+      var(--gold-7) 94%);
   border: 3px double var(--gold-4);
   box-shadow: inset 0 0 0.3rem var(--gold-3);
   color: var(--gold-3);
@@ -382,14 +378,12 @@ html {
   right: 0.25rem;
   top: 0.25rem;
   /* background: var(--gold-3); */
-  background: linear-gradient(
-    45deg,
-    var(--gold-2) 0%,
-    var(--gold-5) 5%,
-    var(--gold-2) 4%,
-    var(--gold-5) 95%,
-    var(--gold-4) 94%
-  );
+  background: linear-gradient(45deg,
+      var(--gold-2) 0%,
+      var(--gold-5) 5%,
+      var(--gold-2) 4%,
+      var(--gold-5) 95%,
+      var(--gold-4) 94%);
   color: var(--gold-7);
   width: 1.25rem;
   height: 1.25rem;
@@ -405,13 +399,13 @@ html {
   cursor: pointer !important;
 }
 
-.dashboard-page > #fridges .fridge-grid {
+.dashboard-page>#fridges .fridge-grid {
   display: flex;
   gap: 0.55rem;
   flex: 1 1 auto;
 }
 
-.dashboard-page > #fridges .fridge-grid > * {
+.dashboard-page>#fridges .fridge-grid>* {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -863,7 +857,7 @@ html {
   align-content: stretch;
 }
 
-.dashboard-page > .fridge-page-header {
+.dashboard-page>.fridge-page-header {
   grid-area: title;
   align-self: center;
   min-width: 0;
@@ -871,14 +865,14 @@ html {
   padding: 0.25rem 0.4rem;
 }
 
-.dashboard-page > .fridge-page-header h1 {
+.dashboard-page>.fridge-page-header h1 {
   margin: 0.25rem 0;
   font-size: clamp(1.35rem, 2vw, 2rem);
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
 
-.dashboard-page > .fridge-page-header p {
+.dashboard-page>.fridge-page-header p {
   margin: 0.25rem 0;
   font-size: 0.8rem;
   line-height: 1.35;
@@ -894,7 +888,7 @@ html {
   min-width: 0;
 }
 
-.dashboard-page > #fridges {
+.dashboard-page>#fridges {
   grid-area: fridges;
   display: flex;
   flex-direction: column;
@@ -902,19 +896,19 @@ html {
   overflow: hidden;
 }
 
-.dashboard-page > #alerts {
+.dashboard-page>#alerts {
   grid-area: alerts;
   min-height: 0;
   overflow: hidden;
 }
 
-.dashboard-page > #notifications {
+.dashboard-page>#notifications {
   grid-area: notifications;
   min-height: 0;
   overflow: hidden;
 }
 
-.dashboard-page > .dashboard-panel {
+.dashboard-page>.dashboard-panel {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -944,7 +938,7 @@ html {
   scrollbar-width: thin;
 }
 
-.dashboard-page > #fridges .fridge-grid {
+.dashboard-page>#fridges .fridge-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 1fr);
@@ -957,7 +951,7 @@ html {
   overflow: hidden;
 }
 
-.dashboard-page > #fridges .fridge-grid > * {
+.dashboard-page>#fridges .fridge-grid>* {
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -1294,7 +1288,7 @@ html {
     padding: 0.45rem;
   }
 
-  .dashboard-page > .dashboard-panel {
+  .dashboard-page>.dashboard-panel {
     padding: 0.45rem;
   }
 
@@ -1336,12 +1330,12 @@ html {
     overflow: visible;
   }
 
-  .dashboard-page > #fridges {
+  .dashboard-page>#fridges {
     height: auto;
     min-height: 0;
   }
 
-  .dashboard-page > #fridges .fridge-grid {
+  .dashboard-page>#fridges .fridge-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: auto;
     overflow: visible;
@@ -1358,8 +1352,8 @@ html {
     min-height: 25rem;
   }
 
-  .dashboard-page > #alerts,
-  .dashboard-page > #notifications {
+  .dashboard-page>#alerts,
+  .dashboard-page>#notifications {
     min-height: 18rem;
     height: auto;
   }
@@ -1378,7 +1372,7 @@ html {
     padding: 0.55rem;
   }
 
-  .dashboard-page > #fridges .fridge-grid {
+  .dashboard-page>#fridges .fridge-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -1390,8 +1384,113 @@ html {
     min-height: 25rem;
   }
 
-  .dashboard-page > #alerts,
-  .dashboard-page > #notifications {
+  .dashboard-page>#alerts,
+  .dashboard-page>#notifications {
     min-height: 14rem;
+  }
+}
+
+.inventory-filters label {
+  display: block;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.inventory-filters input,
+.inventory-filters select,
+.inventory-filters select option {
+  background-color: var(--blue-1);
+  color: white;
+  border: 1px solid var(--gold-2);
+}
+
+.inventory-filters input::placeholder {
+  color: silver;
+}
+
+.inventory-filters select {
+  padding: 10px;
+  width: 100%;
+}
+
+.inventory-stock-empty {
+  color: lightcoral;
+}
+
+.inventory-stock-low {
+  color: gold;
+}
+
+.inventory-stock-ok {
+  color: lightgreen;
+}
+
+.inventory-export-button {
+  display: block;
+  width: fit-content;
+  margin: 0 0 16px auto;
+}
+
+.sales-reports-page .form-field label {
+  display: block;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.sales-reports-page select,
+.sales-reports-page select option {
+  background-color: var(--blue-1);
+  color: white;
+}
+
+.sales-reports-page select {
+  border: 1px solid var(--gold-2);
+  padding: 10px;
+}
+
+.sales-reports-page .sales-category-filter {
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+
+.sales-reports-page .sales-ranking-filter {
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+
+/* Use the available page width. */
+.account-page.sales-reports-page {
+  width: calc(100% - 32px);
+  max-width: none;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+.sales-reports-page .account-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* Totals and graph left; product reports right. */
+.sales-report-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.sales-report-columns>* {
+  min-width: 0;
+}
+
+.sales-report-products .sales-category-filter {
+  margin-top: 0;
+}
+
+/* Stack the columns on smaller screens. */
+@media (max-width: 1000px) {
+  .sales-report-columns {
+    grid-template-columns: 1fr;
   }
 }
