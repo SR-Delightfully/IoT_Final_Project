@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import Fridge from "../components/Fridge";
+import EnvironmentSensor from "../components/EnvironmentSensor";
 import { useToast } from "../components/Toaster";
 import Header from "../layout/header";
+import { authHeaders } from "../utils/auth";
 
 const API = "http://localhost:5050";
 const REFRESH_MS = 2000;
 
 async function fetchJson(path) {
-  const response = await fetch(`${API}${path}`, { cache: "no-store" });
+  const response = await fetch(`${API}${path}`, {
+    cache: "no-store",
+    headers: authHeaders(),
+  });
   if (!response.ok) throw new Error(`${path}: ${response.status}`);
   return response.json();
 }
@@ -120,7 +125,8 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
                 <span className="dashboard-notification-indicator" />
                 <div className="dashboard-list-content">
                   <strong>
-                    {notification.notification_type || "Notification"}
+                    {notification.notification_title || notification.notification_type || "Notification"}
+                    {notification.notification_type && ` · ${notification.notification_type}`}
                   </strong>
                   <span>
                     {notification.alert_message ||
@@ -170,6 +176,62 @@ function FridgeDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [busyAlertIds, setBusyAlertIds] = useState([]);
   const [busyNotificationIds, setBusyNotificationIds] = useState([]);
+  const [busyFanIds, setBusyFanIds] = useState([]);
+  const [savingLimitIds, setSavingLimitIds] = useState([]);
+
+  // PUT a JSON body and return the parsed reply (throws with the backend's message).
+  async function putJson(path, body) {
+    const response = await fetch(`${API}${path}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        response.status === 403
+          ? "Log in as an admin to change fridge settings."
+          : data.error || "Request failed"
+      );
+    }
+    return data;
+  }
+
+  async function toggleFan(fridge, on) {
+    setBusyFanIds((current) => [...current, fridge.fridge_id]);
+    try {
+      await putJson(`/fridges/${fridge.fridge_id}/fan`, { on });
+      setFridges((current) =>
+        current.map((f) =>
+          f.fridge_id === fridge.fridge_id
+            ? { ...f, fridge_fan_on: on ? 1 : 0, fridge_fan_source: on ? "dashboard" : null }
+            : f
+        )
+      );
+      toast.success(`${fridge.fridge_name}: fan turned ${on ? "on" : "off"}.`);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setBusyFanIds((current) => current.filter((id) => id !== fridge.fridge_id));
+    }
+  }
+
+  async function saveLimits(fridge, limits) {
+    setSavingLimitIds((current) => [...current, fridge.fridge_id]);
+    try {
+      const data = await putJson(`/fridges/${fridge.fridge_id}/threshold`, limits);
+      setFridges((current) =>
+        current.map((f) =>
+          f.fridge_id === fridge.fridge_id ? { ...f, ...(data.fridge || limits) } : f
+        )
+      );
+      toast.success(`${fridge.fridge_name}: limits saved.`);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSavingLimitIds((current) => current.filter((id) => id !== fridge.fridge_id));
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -244,7 +306,7 @@ function FridgeDashboard() {
     try {
       const response = await fetch(`${API}${path}`, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(body),
       });
 
@@ -386,6 +448,8 @@ function FridgeDashboard() {
           <span className="dashboard-count">{fridges.length} UNITS</span>
         </header>
 
+        <EnvironmentSensor fridges={fridges} />
+
         {fridges.length === 0 ? (
           <p className="dashboard-empty">
             {error || "No fridges are currently available."}
@@ -393,7 +457,14 @@ function FridgeDashboard() {
         ) : (
           <div className="fridge-grid">
             {fridges.map((fridge) => (
-              <Fridge key={fridge.fridge_id} fridge={fridge} />
+              <Fridge
+                key={fridge.fridge_id}
+                fridge={fridge}
+                onToggleFan={toggleFan}
+                onSaveLimits={saveLimits}
+                fanBusy={busyFanIds.includes(fridge.fridge_id)}
+                savingLimits={savingLimitIds.includes(fridge.fridge_id)}
+              />
             ))}
           </div>
         )}

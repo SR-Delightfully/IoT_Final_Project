@@ -1,11 +1,47 @@
 import { useEffect, useState } from "react";
-import { fetchSalesReport, downloadSalesCsv } from "../utils/reports";
+import { fetchSalesReport, downloadSalesCsv, checkDateFilters } from "../utils/reports";
 import { formatPrice } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
 import SalesTable from "../components/SalesTable";
 import SalesChart from "../components/SalesChart";
+import CustomerActivityReport from "../components/CustomerActivityReport";
+
+const TABS = [
+    { id: "sales", label: "Sales" },
+    { id: "customers", label: "Customer Activity" },
+];
 
 function Reports() {
+    const [tab, setTab] = useState("sales");
+
+    return (
+        <main className="account-page sales-reports-page">
+            <div className="account-card">
+                <div className="account-card-body">
+                    <h1 className="account-title">Reports</h1>
+                    <div className="report-tabs" role="tablist">
+                        {TABS.map((t) => (
+                            <button
+                                key={t.id}
+                                type="button"
+                                role="tab"
+                                aria-selected={tab === t.id}
+                                className={`report-tab ${tab === t.id ? "is-active" : ""}`}
+                                onClick={() => setTab(t.id)}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {tab === "sales" ? <SalesReport /> : <CustomerActivityReport />}
+                </div>
+            </div>
+        </main>
+    );
+}
+
+function SalesReport() {
     const [report, setReport] = useState(null);
     const [error, setError] = useState("");
     // Store the selected sales-report dates.
@@ -19,31 +55,13 @@ function Reports() {
             .catch((err) => setError(err.message));
     }, []);
     function applyFilters() {
-        setError("");
-
         // Check typed dates against the calendar's accepted selections.
-        for (const [id, selectedDate] of [
-            ["start-date", startDate],
-            ["end-date", endDate],
-        ]) {
-            const text = document.getElementById(id).value;
-            const typedDate = text === "yyyy-mm-dd" ? "" : text.trim();
-
-            if (
-                typedDate !== selectedDate ||
-                (selectedDate &&
-                    (selectedDate < "1950-01-01" ||
-                        new Date(`${selectedDate}T00:00:00`) > new Date()))
-            ) {
-                setError("Enter a valid date between 1950-01-01 and today.");
-                return;
-            }
-        }
-
-        if (startDate && endDate && startDate > endDate) {
-            setError("Start date must be on or before end date.");
+        const problem = checkDateFilters(startDate, endDate);
+        if (problem) {
+            setError(problem);
             return;
         }
+        setError("");
 
         setReport(null);
 
@@ -86,10 +104,7 @@ function Reports() {
         .slice(0, rankingCount);
 
     return (
-        <main className="account-page sales-reports-page">
-            <div className="account-card">
-                <div className="account-card-body">
-                    <h1 className="account-title">Sales Reports</h1>
+        <>
                     <button
                         type="button"
                         className="account-button inventory-export-button"
@@ -166,10 +181,8 @@ function Reports() {
                                 </div>
 
                                 <p className="points-next">
-                                    <p className="points-next">
-                                        Category filters apply to the totals, graph, product tables and rankings.
-                                        Product sales exclude tax and purchase-level discounts.
-                                    </p>
+                                    Category filters apply to the totals, graph, product tables and rankings.
+                                    Product sales exclude tax and purchase-level discounts.
                                 </p>
                                 <SalesTable
                                     title="Units Sold by Product"
@@ -200,9 +213,7 @@ function Reports() {
                             </div>
                         </div>
                     )}
-                </div>
-            </div>
-        </main>
+        </>
     );
 }
 

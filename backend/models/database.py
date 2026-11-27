@@ -74,6 +74,37 @@ def _build_database():
     finally:
         conn.close()
 
+# Columns added after the first schema. CREATE TABLE IF NOT EXISTS skips
+# tables that already exist, so older databases get them here instead.
+ADDED_COLUMNS = {
+    "Fridges": [
+        ("fridge_fan_source", "TEXT"),
+    ],
+    "Categories": [
+        ("category_low_threshold", "INTEGER NOT NULL DEFAULT 5"),
+        ("category_moderate_threshold", "INTEGER NOT NULL DEFAULT 15"),
+    ],
+    "SensorReadings": [
+        ("sensor_light_detected", "INTEGER CHECK (sensor_light_detected IN (0, 1))"),
+    ],
+}
+
+
+def migrate_db(conn):
+    for table, columns in ADDED_COLUMNS.items():
+        existing = {
+            row[1] for row in conn.execute(f"PRAGMA table_info({_identifier(table)})")
+        }
+
+        for column, definition in columns:
+            if column not in existing:
+                conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN {_identifier(column)} {definition}"
+                )
+                print(f"Added {table}.{column}")
+
+    conn.commit()
+
 
 def init_db():
     if not SCHEMA_FILE.exists():
@@ -88,6 +119,8 @@ def init_db():
         conn.executescript(
             SCHEMA_FILE.read_text(encoding="utf-8")
         )
+
+        migrate_db(conn)
 
         conn.executescript(
             SEED_FILE.read_text(encoding="utf-8")

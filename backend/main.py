@@ -5,6 +5,7 @@ import os
 import secrets
 import sqlite3
 import sys
+import threading
 from datetime import date
 
 from models.database import init_db, DB_FILE, get_connection
@@ -23,16 +24,26 @@ from models.client_models.model_customers import (
     update_customer
 )
 from models.client_models.model_receipts import get_customer_receipt
-from models.management_models.model_fridges import get_all_fridges, update_fridge
+from models.management_models.model_fridges import (
+    get_fridge,
+    get_fridge_dashboard,
+    set_fridge_fan,
+    update_fridge
+)
 from models.management_models.model_readings import get_latest_reading
-from models.management_models.model_alerts import get_all_alerts
-from models.management_models.model_notifications import get_user_notifications
+from models.management_models.model_alerts import get_alerts_with_fridge, acknowledge_alert
+from models.management_models.model_notifications import (
+    get_user_notifications,
+    get_all_notifications_detailed,
+    mark_notification_read
+)
 from models.management_models.model_stock_receipts import add_stock_receipt
 from models.report_model import (
     get_inventory_report,
     get_sales_total,
     get_product_sales,
-    get_daily_sales
+    get_daily_sales,
+    get_customer_activity
 )
 
 # Merge conflict 2 nov 13 : keep dashboard/account functions, checkout services and receipt emailing.
@@ -52,6 +63,7 @@ from models.product_model import (
     add_product,
     update_product,
     get_categories,
+    update_category_thresholds,
     receive_tagged_stock,
     TagError
 )
@@ -70,10 +82,15 @@ ROLES = ("customer", "admin")
 
 
 def hardware_feedback(*attempt):
-    try:
-        login(*attempt)
-    except Exception as error:
-        print(f"Hardware feedback unavailable: {error}")
+    # Blue LED on success, red LED + buzzer on failure. The fade takes about
+    # 3 seconds, so run it in the background instead of delaying the reply.
+    def run():
+        try:
+            login(*attempt)
+        except Exception as error:
+            print(f"Hardware feedback unavailable: {error}")
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 SESSIONS = {}  # login token -> user_id
@@ -295,6 +312,36 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(500, {"error": "Could not load sales report"})
 
             return
+        # Customer activity report: admin only.
+        if path == "/admin/reports/customers":
+            if not self.require_admin():
+                return
+
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+
+            if start_date and end_date and start_date > end_date:
+                self.send_json(400, {"error": "Start date must be on or before end date."})
+                return
+
+            try:
+                self.send_json(200, get_customer_activity(start_date, end_date))
+            except sqlite3.Error as error:
+                print(f"Customer activity report error: {error}")
+                self.send_json(500, {"error": "Could not load customer activity report"})
+
+            return
+
         # Products, tags and membership cards for the scanner simulator
         if path == "/simulate/catalog":
             if self.require_simulator():
@@ -507,15 +554,7 @@ class Server(BaseHTTPRequestHandler):
 
         if path == "/fridges":
             try:
-                dashboard = []
-
-                for fridge in get_all_fridges():
-                    data = dict(fridge)
-                    reading = get_latest_reading(data["fridge_id"])
-                    data["latest_reading"] = dict(reading) if reading else None
-                    dashboard.append(data)
-
-                self.send_json(200, {"fridges": dashboard})
+                self.send_json(200, {"fridges": get_fridge_dashboard()})
 
             except Exception as error:
                 print(f"Fridge fetch error: {error}")
@@ -525,11 +564,22 @@ class Server(BaseHTTPRequestHandler):
 
         if path == "/alerts":
             try:
-                alerts = get_all_alerts()
-                self.send_json(200, [dict(alert) for alert in alerts])
+                self.send_json(200, get_alerts_with_fridge())
             except Exception as error:
                 print(f"Alert fetch error: {error}")
                 self.send_json(500, {"error": "Could not load alerts"})
+            return
+
+        # Every notification (fridge alert emails and dashboard alerts): admin only.
+        if path == "/notifications":
+            if not self.require_admin():
+                return
+
+            try:
+                self.send_json(200, get_all_notifications_detailed())
+            except sqlite3.Error as error:
+                print(f"Notification fetch error: {error}")
+                self.send_json(500, {"error": "Could not load notifications"})
             return
 
         # Latest reading for one refrigerator
@@ -618,7 +668,93 @@ class Server(BaseHTTPRequestHandler):
             self.update_threshold(parts[1])
             return
 
+        if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "fan":
+            self.set_fan_route(parts[1])
+            return
+
+        # Stock-level thresholds for one category (admin only)
+        if len(parts) == 4 and parts[:2] == ["admin", "categories"] and parts[3] == "thresholds":
+            self.update_category_thresholds_route(parts[2])
+            return
+
+        if len(parts) == 3 and parts[0] == "notifications" and parts[2] == "read":
+            if not self.require_admin():
+                return
+
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid notification ID"})
+                return
+
+            if mark_notification_read(int(parts[1])):
+                self.send_json(200, {"message": "Notification marked as read"})
+            else:
+                self.send_json(404, {"error": "Notification not found"})
+            return
+
         self.send_json(404, {"error": "Route not found"})
+
+    def update_category_thresholds_route(self, category_id):
+        if not self.require_admin():
+            return
+
+        if not category_id.isdigit():
+            self.send_json(400, {"error": "Invalid category ID"})
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        low = data.get("low_threshold")
+        moderate = data.get("moderate_threshold")
+
+        if type(low) is not int or type(moderate) is not int or low < 0 or moderate < 0:
+            self.send_json(400, {"error": "Thresholds must be whole numbers of 0 or more."})
+            return
+
+        if low > moderate:
+            self.send_json(400, {"error": "The low level must not be above the moderate level."})
+            return
+
+        if update_category_thresholds(int(category_id), low, moderate):
+            self.send_json(200, {"message": "Stock levels saved"})
+        else:
+            self.send_json(404, {"error": "Category not found"})
+
+    # Turn a fridge fan on or off from the dashboard. On the Pi this also
+    # drives the DC motor through mqttProj; elsewhere only the database changes.
+    def set_fan_route(self, fridge_id):
+        if not self.require_admin():
+            return
+
+        if not fridge_id.isdigit():
+            self.send_json(400, {"error": "Invalid fridge ID"})
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        if type(data.get("on")) is not bool:
+            self.send_json(400, {"error": "'on' must be true or false"})
+            return
+
+        fridge_id = int(fridge_id)
+
+        try:
+            if mqttProj is not None:
+                mqttProj.set_fan(fridge_id, data["on"])
+            elif not set_fridge_fan(fridge_id, data["on"]):
+                raise KeyError(fridge_id)
+        except KeyError:
+            self.send_json(404, {"error": "Fridge not found"})
+            return
+        except Exception as error:
+            print(f"Fan control error: {error}")
+            self.send_json(500, {"error": "Could not change the fan"})
+            return
+
+        self.send_json(200, {"fridge_id": fridge_id, "fridge_fan_on": data["on"]})
 
     # Replace a product's details, category and barcode
     def replace_product(self, product_id):
@@ -662,7 +798,11 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(404, {"error": "Product not found"})
 
     # Update the minimum temperature for a refrigerator
+    # Save a fridge's operating limits. The alert email fires above the max temperature.
     def update_threshold(self, fridge_id):
+        if not self.require_admin():
+            return
+
         if not fridge_id.isdigit():
             self.send_json(400, {"error": "Invalid fridge ID"})
             return
@@ -671,21 +811,44 @@ class Server(BaseHTTPRequestHandler):
         if data is None:
             return
 
-        if type(data.get("min_temperature")) not in (int, float):
-            self.send_json(400, {"error": "Invalid temperature"})
+        fields = (
+            "fridge_min_temperature",
+            "fridge_max_temperature",
+            "fridge_min_humidity",
+            "fridge_max_humidity",
+        )
+        values = {}
+
+        for field in fields:
+            value = data.get(field)
+
+            # bool is a subclass of int, so reject it explicitly
+            if type(value) not in (int, float):
+                self.send_json(400, {"error": f"{field} must be a number"})
+                return
+
+            values[field] = float(value)
+
+        if values["fridge_min_temperature"] > values["fridge_max_temperature"]:
+            self.send_json(400, {"error": "Minimum temperature must not be above the maximum."})
+            return
+
+        if values["fridge_min_humidity"] > values["fridge_max_humidity"]:
+            self.send_json(400, {"error": "Minimum humidity must not be above the maximum."})
+            return
+
+        if values["fridge_min_humidity"] < 0 or values["fridge_max_humidity"] > 100:
+            self.send_json(400, {"error": "Humidity must be between 0 and 100%."})
             return
 
         try:
-            updated = update_fridge(
-                int(fridge_id),
-                {"fridge_min_temperature": data["min_temperature"]}
-            )
+            updated = update_fridge(int(fridge_id), values)
         except sqlite3.IntegrityError:
-            self.send_json(400, {"error": "Temperature violates fridge limits"})
+            self.send_json(400, {"error": "These limits are not allowed for this fridge."})
             return
 
         if updated:
-            self.send_json(200, {"message": "Threshold updated"})
+            self.send_json(200, {"message": "Limits saved", "fridge": get_fridge(int(fridge_id))})
         else:
             self.send_json(404, {"error": "Fridge not found"})
 
@@ -825,6 +988,22 @@ class Server(BaseHTTPRequestHandler):
 
         if path == "/loyalty/redeem":
             self.redeem_loyalty_reward()
+            return
+
+        # Acknowledge a fridge alert from the dashboard (admin only)
+        if len(parts) == 3 and parts[0] == "alerts" and parts[2] == "acknowledge":
+            admin = self.require_admin()
+            if not admin:
+                return
+
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid alert ID"})
+                return
+
+            if acknowledge_alert(int(parts[1]), admin["user_id"]):
+                self.send_json(200, {"message": "Alert acknowledged"})
+            else:
+                self.send_json(404, {"error": "Alert not found or already resolved"})
             return
 
         if path == "/checkout/authorize-employee":
@@ -1087,6 +1266,7 @@ class Server(BaseHTTPRequestHandler):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
+                hardware_feedback(False)
                 self.send_json(400, {"error": f"Missing or invalid field: {field}"})
                 return
 
@@ -1734,12 +1914,7 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Cart item not found"})
                 return
 
-            if quantity < current_item["session_item_quantity"]:
-                employee = self.get_employee_by_id(data.get("employee_id"))
-                if employee is None:
-                    self.send_json(403, {"error": "Employee authorization is required to reduce item quantities"})
-                    return
-
+            # Customers can lower quantities themselves before paying (Phase 3).
             cart = self.checkout.set_quantity(int(parts[2]), int(parts[4]), quantity)
 
             if cart is False or cart is None:
@@ -1795,15 +1970,7 @@ class Server(BaseHTTPRequestHandler):
             return
 
         try:
-            data = self.read_json_or_400()
-            if data is None:
-                return
-
-            employee = self.get_employee_by_id(data.get("employee_id"))
-            if employee is None:
-                self.send_json(403, {"error": "Employee authorization is required to remove cart items"})
-                return
-
+            # Customers can remove unwanted items themselves before paying (Phase 3).
             cart = self.checkout.remove_from_session(int(parts[2]), int(parts[4]))
 
             if cart is False or cart is None:

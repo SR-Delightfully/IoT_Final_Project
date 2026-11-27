@@ -46,6 +46,131 @@ async function adminRequest(path, method = "GET", body, options = {}) {
   return data;
 }
 
+// Stock level from the product's category thresholds:
+// at or below low = red, at or below moderate = yellow, above = green.
+function stockLevel(p) {
+  const qty = p.quantity_in_stock;
+  if (qty <= 0) return { key: "empty", label: "Out of stock" };
+  if (qty <= (p.category_low_threshold ?? 5)) return { key: "low", label: "Low stock" };
+  if (qty <= (p.category_moderate_threshold ?? 15)) return { key: "moderate", label: "Moderate stock" };
+  return { key: "ok", label: "In stock" };
+}
+
+function isLowStock(p) {
+  return Boolean(p.product_active) && ["empty", "low"].includes(stockLevel(p).key);
+}
+
+// Edit the low / moderate stock levels for each category.
+function StockLevelSettings({ categories, onSaved, onError }) {
+  const [drafts, setDrafts] = useState({});
+  const [savingId, setSavingId] = useState(null);
+
+  function value(c, field) {
+    return drafts[c.category_id]?.[field] ?? c[field] ?? "";
+  }
+
+  function change(c, field, text) {
+    setDrafts((current) => ({
+      ...current,
+      [c.category_id]: { ...current[c.category_id], [field]: text },
+    }));
+  }
+
+  async function save(c) {
+    const low = Number(value(c, "category_low_threshold"));
+    const moderate = Number(value(c, "category_moderate_threshold"));
+
+    if (!Number.isInteger(low) || !Number.isInteger(moderate) || low < 0 || moderate < 0) {
+      onError(new Error("Stock levels must be whole numbers of 0 or more."));
+      return;
+    }
+    if (low > moderate) {
+      onError(new Error("The low level must not be above the moderate level."));
+      return;
+    }
+
+    setSavingId(c.category_id);
+    try {
+      await adminRequest(`/admin/categories/${c.category_id}/thresholds`, "PUT", {
+        low_threshold: low,
+        moderate_threshold: moderate,
+      });
+      onSaved(c, low, moderate);
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[c.category_id];
+        return next;
+      });
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  return (
+    <details className="account-section stock-level-settings">
+      <summary className="account-section-title">Stock alert levels by category</summary>
+      <p className="points-next">
+        <span className="inventory-stock-low">Red</span> at or below the low level,{" "}
+        <span className="inventory-stock-moderate">yellow</span> at or below the moderate level,{" "}
+        <span className="inventory-stock-ok">green</span> above it.
+      </p>
+      <div className="history-scroll">
+        <table className="history-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Low (red)</th>
+              <th>Moderate (yellow)</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((c) => (
+              <tr key={c.category_id}>
+                <td>{c.category_name}</td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="stock-level-input"
+                    aria-label={`${c.category_name} low stock level`}
+                    value={value(c, "category_low_threshold")}
+                    onChange={(e) => change(c, "category_low_threshold", e.target.value)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="stock-level-input"
+                    aria-label={`${c.category_name} moderate stock level`}
+                    value={value(c, "category_moderate_threshold")}
+                    onChange={(e) => change(c, "category_moderate_threshold", e.target.value)}
+                  />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="dashboard-btn-small dashboard-btn-secondary"
+                    disabled={savingId === c.category_id || !drafts[c.category_id]}
+                    onClick={() => save(c)}
+                  >
+                    {savingId === c.category_id ? "Saving..." : "Save"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 function findByUpc(products, upc) {
   const value = upc.trim();
   return value ? products.find((p) => p.product_upc === value) : undefined;
@@ -324,6 +449,8 @@ function ProductDashboard() {
   const [category, setCategory] = useState("");
 
   const upcRef = useRef(null);
+  // Product ids already reported as low, so the toast only fires for new ones.
+  const knownLowIds = useRef(null);
 
   const handleError = useCallback(
     (err) => {
@@ -355,6 +482,21 @@ function ProductDashboard() {
       .then(setCategories)
       .catch(() => { });
   }, [handleError]);
+
+  // Toast when a product newly drops to low stock (e.g. after a checkout).
+  useEffect(() => {
+    if (!products) return;
+    const lowNow = products.filter(isLowStock);
+
+    if (knownLowIds.current) {
+      lowNow
+        .filter((p) => !knownLowIds.current.has(p.product_id))
+        .forEach((p) =>
+          toast.error(`Low stock: ${p.product_name} (${p.quantity_in_stock} left)`)
+        );
+    }
+    knownLowIds.current = new Set(lowNow.map((p) => p.product_id));
+  }, [products, toast]);
 
   // Refresh inventory every five seconds while this page is open.
   useEffect(() => {
@@ -520,6 +662,8 @@ function ProductDashboard() {
   const totalStock = (products || []).reduce((sum, p) => sum + p.quantity_in_stock, 0);
   const activeCount = (products || []).filter((p) => p.product_active).length;
   const outOfStock = (products || []).filter((p) => p.quantity_in_stock <= 0).length;
+  // Visible products at or below their category's low level (includes out of stock).
+  const lowStock = (products || []).filter(isLowStock);
   const newCount = tagScan.newEpcs.length;
 
   return (
@@ -555,8 +699,42 @@ function ProductDashboard() {
                     <span className="form-label">Out of stock</span>
                     <span className="points-value">{outOfStock}</span>
                   </div>
+                  <div className="points-stat">
+                    <span className="form-label">Low stock</span>
+                    <span className="points-value inventory-stock-low">{lowStock.length}</span>
+                  </div>
                 </div>
               </section>
+
+              {lowStock.length > 0 && (
+                <div className="low-stock-banner" role="alert">
+                  <strong>
+                    {lowStock.length} product{lowStock.length === 1 ? "" : "s"} low on stock:
+                  </strong>{" "}
+                  {lowStock
+                    .slice(0, 6)
+                    .map((p) => `${p.product_name} (${p.quantity_in_stock})`)
+                    .join(", ")}
+                  {lowStock.length > 6 && `, and ${lowStock.length - 6} more`}
+                </div>
+              )}
+
+              <StockLevelSettings
+                categories={categories}
+                onSaved={(c, low, moderate) => {
+                  // Show the saved values right away, then reload stock colours.
+                  setCategories((current) =>
+                    current.map((cat) =>
+                      cat.category_id === c.category_id
+                        ? { ...cat, category_low_threshold: low, category_moderate_threshold: moderate }
+                        : cat
+                    )
+                  );
+                  toast.success(`Stock levels saved for ${c.category_name}.`);
+                  loadProducts();
+                }}
+                onError={handleError}
+              />
 
               <section className="account-section">
                 <h2 className="account-section-title">Add Products</h2>
@@ -764,20 +942,8 @@ function ProductDashboard() {
                             <td>{formatPrice(p.product_price_cents)}</td>
                             <td>
                               <span
-                                className={
-                                  p.quantity_in_stock === 0
-                                    ? "inventory-stock-empty"
-                                    : p.quantity_in_stock < 5
-                                      ? "inventory-stock-low"
-                                      : "inventory-stock-ok"
-                                }
-                                title={
-                                  p.quantity_in_stock === 0
-                                    ? "Out of stock"
-                                    : p.quantity_in_stock < 5
-                                      ? "Low stock"
-                                      : "Available"
-                                }
+                                className={`inventory-stock-badge inventory-stock-${stockLevel(p).key}`}
+                                title={`${stockLevel(p).label} (low ≤ ${p.category_low_threshold}, moderate ≤ ${p.category_moderate_threshold})`}
                               >
                                 {p.quantity_in_stock}
                               </span>

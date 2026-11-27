@@ -527,8 +527,12 @@ class SelfCheckout:
             ).lastrowid
 
             purchase_items = {}
+            # Tags still to record per product: never more than the quantity bought,
+            # so a scanned item the customer removed is not marked as sold.
+            tags_left = {}
             for item in items:
                 quantity = item["session_item_quantity"]
+                tags_left[item["product_id"]] = quantity
                 purchase_item_id = conn.execute(
                     """
                     INSERT INTO PurchaseItems (
@@ -559,8 +563,9 @@ class SelfCheckout:
                     "SELECT product_tag_id, product_id FROM ProductTags WHERE UPPER(product_tag_epc) = ?",
                     (epc.upper(),)
                 ).fetchone()
-                if tag is None or tag["product_id"] not in purchase_items:
+                if tag is None or tags_left.get(tag["product_id"], 0) <= 0:
                     continue
+                tags_left[tag["product_id"]] -= 1
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO ProductTagSales (product_tag_id, purchase_item_id)

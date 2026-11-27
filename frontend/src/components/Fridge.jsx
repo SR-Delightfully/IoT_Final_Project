@@ -1,18 +1,30 @@
-import { useState } from "react";
 import TempGauge from "./TempGuage";
 import HumidityBar from "./HumidityBar";
 import Fan from "./Fan";
 
-function Fridge({ fridge }) {
-  const [fanStatus, setFanStatus] = useState(
-    String(fridge.fridge_fan_on ?? fridge.fan_status ?? "OFF") === "1" ||
-    String(fridge.fridge_fan_on ?? fridge.fan_status ?? "OFF").toUpperCase() === "ON"
-      ? "ON"
-      : "OFF"
-  );
+const LIMIT_FIELDS = [
+  "fridge_min_temperature",
+  "fridge_max_temperature",
+  "fridge_min_humidity",
+  "fridge_max_humidity",
+];
+
+// The fan state comes from the database on every dashboard refresh, so a fan
+// turned on by an email "YES" shows here too.
+function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimits = false }) {
+  const fanStatus = Number(fridge.fridge_fan_on) === 1 ? "ON" : "OFF";
 
   function toggleFan() {
-    setFanStatus((current) => (current === "ON" ? "OFF" : "ON"));
+    onToggleFan?.(fridge, fanStatus !== "ON");
+  }
+
+  function saveLimits(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const limits = Object.fromEntries(
+      LIMIT_FIELDS.map((field) => [field, Number(form.get(field))])
+    );
+    onSaveLimits?.(fridge, limits);
   }
 
   return (
@@ -37,7 +49,12 @@ function Fridge({ fridge }) {
 
         <section className="fridge-fan-panel">
           <span className="ceiling-label">COOLING ASSEMBLY</span>
-          <Fan status={fanStatus} onToggle={toggleFan} />
+          <Fan status={fanStatus} onToggle={toggleFan} disabled={fanBusy} />
+          {fridge.fridge_fan_on === 1 && fridge.fridge_fan_source && (
+            <span className="fridge-fan-source">
+              Turned on by {fridge.fridge_fan_source === "email" ? "email reply" : "dashboard"}
+            </span>
+          )}
         </section>
 
         <section className="fridge-monitoring">
@@ -66,7 +83,7 @@ function Fridge({ fridge }) {
         <form
           id={`customer-fridge-${fridge.fridge_id}`}
           className="customer-fridge-form"
-          onSubmit={(event) => event.preventDefault()}
+          onSubmit={saveLimits}
         >
           <div className="fridge-section-heading">
             <span>02</span>
@@ -132,8 +149,8 @@ function Fridge({ fridge }) {
               />
             </div>
 
-            <button className="fridge-save-button" type="submit">
-              SAVE LIMITS
+            <button className="fridge-save-button" type="submit" disabled={savingLimits}>
+              {savingLimits ? "SAVING..." : "SAVE LIMITS"}
             </button>
           </div>
         </form>

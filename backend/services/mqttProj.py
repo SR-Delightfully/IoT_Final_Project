@@ -43,7 +43,14 @@ ALERT_EMAILS = [
 ]
 ALERT_SET = {a.lower() for a in ALERT_EMAILS}
 
-TOPIC_RE = re.compile(r"^fridge/(\d+)/(temperature|humidity)$")
+TOPIC_RE = re.compile(r"^fridge/(\d+)/(temperature|humidity|motion|light|light_detected|battery)$")
+# MSP01 topics -> SensorReadings column
+SENSOR_COLUMNS = {
+    "motion": "sensor_motion",
+    "light": "sensor_light",
+    "light_detected": "sensor_light_detected",
+    "battery": "sensor_battery",
+}
 ALERT_ID_RE = re.compile(r"Fridge alert #(\d+)", re.IGNORECASE)
 FORWARD_RE = re.compile(r"^\s*(fwd?|tr)\s*:", re.IGNORECASE)
 YES_RE = re.compile(r"\bYES\b", re.IGNORECASE)
@@ -89,14 +96,13 @@ def setup_db():
             conn.execute("ALTER TABLE Fridges ADD COLUMN fridge_fan_source TEXT")
             print("Added fridge_fan_source column to Fridges")
 
+        # Only add fridges that are missing. Saved thresholds are never overwritten,
+        # so limits changed on the dashboard survive a restart.
         for f in FRIDGES:
-            updated = conn.execute(
-                "UPDATE Fridges SET fridge_max_temperature = ? WHERE fridge_id = ?",
-                (f["fridge_max_temperature"], f["fridge_id"]),
-            ).rowcount
-            if updated:
-                print(f"Fridge {f['fridge_id']} max temperature set to {f['fridge_max_temperature']}°C")
-            else:
+            exists = conn.execute(
+                "SELECT 1 FROM Fridges WHERE fridge_id = ?", (f["fridge_id"],)
+            ).fetchone()
+            if not exists:
                 conn.execute(
                     f"INSERT INTO Fridges ({', '.join(f)}) VALUES ({', '.join('?' * len(f))})",
                     tuple(f.values()),
@@ -105,11 +111,9 @@ def setup_db():
 
         closed = conn.execute(
             """UPDATE Alerts
-               SET alert_resolved_at = COALESCE(alert_resolved_at, CURRENT_TIMESTAMP),
-                   alert_status = CASE WHEN alert_acknowledged_at IS NULL
-                                       THEN 'expired' ELSE alert_status END
-               WHERE alert_resolved_at IS NULL
-                  OR (alert_acknowledged_at IS NULL AND COALESCE(alert_status, '') != 'expired')"""
+               SET alert_status = 'RESOLVED',
+                   alert_resolved_at = COALESCE(alert_resolved_at, CURRENT_TIMESTAMP)
+               WHERE alert_status != 'RESOLVED'"""
         ).rowcount
         if closed:
             print(f"Restart: cleared {closed} old alert(s) - next reading above max sends a new email")
@@ -173,6 +177,14 @@ def on_message(client, userdata, msg):
         print(f"Bad payload on {msg.topic}: {msg.payload}")
         return
 
+    # MSP01 extras (motion, light, battery) arrive on their own and are stored as-is.
+    if kind in SENSOR_COLUMNS:
+        try:
+            handle_sensor_value(fridge_id, kind, value)
+        except Exception as e:
+            print(f"Error saving {kind} for fridge {fridge_id}: {e}")
+        return
+
     reading = pending.setdefault(fridge_id, {})
     reading[kind] = value
     if len(reading) < 2:
@@ -195,14 +207,19 @@ def handle_reading(fridge_id, temp, humidity):
         name, max_temp = fridge["fridge_name"], fridge["fridge_max_temperature"]
 
         reading_id = conn.execute(
-            "INSERT INTO FridgeReadings (fridge_id, reading_humidity, reading_temperature) VALUES (?, ?, ?)",
+            "INSERT INTO Readings (fridge_id, reading_humidity, reading_temperature) VALUES (?, ?, ?)",
             (fridge_id, humidity, temp),
         ).lastrowid
         print(f"{name}: {temp}°C, {humidity}% (max {max_temp}°C) - saved as reading #{reading_id}")
 
+        # Alerts link to a reading, and the reading holds the fridge.
         open_alert = conn.execute(
-            """SELECT alert_id, alert_acknowledged_at FROM Alerts
-               WHERE fridge_id = ? AND alert_type = 'temperature' AND alert_resolved_at IS NULL""",
+            """SELECT Alerts.alert_id, Alerts.alert_acknowledged_at
+               FROM Alerts
+               JOIN Readings ON Readings.reading_id = Alerts.reading_id
+               WHERE Readings.fridge_id = ?
+                 AND Alerts.alert_type = 'TEMPERATURE'
+                 AND Alerts.alert_status != 'RESOLVED'""",
             (fridge_id,),
         ).fetchone()
 
@@ -213,16 +230,17 @@ def handle_reading(fridge_id, temp, humidity):
             else:
                 message = f"The current temperature is {temp}°C. Would you like to turn on the fan?"
                 alert_id = conn.execute(
-                    """INSERT INTO Alerts (fridge_id, reading_id, alert_type, alert_condition, alert_value, alert_message)
-                       VALUES (?, ?, 'temperature', 'above_max', ?, ?)""",
-                    (fridge_id, reading_id, temp, message),
+                    """INSERT INTO Alerts (reading_id, alert_type, alert_condition, alert_value, alert_message)
+                       VALUES (?, 'TEMPERATURE', 'ABOVE_MAX', ?, ?)""",
+                    (reading_id, temp, message),
                 ).lastrowid
                 recipients = [(addr, find_user_id(conn, addr)) for addr in ALERT_EMAILS]
                 new_alert = (alert_id, fridge, temp, message, recipients)
         else:
             if open_alert:
                 conn.execute(
-                    "UPDATE Alerts SET alert_resolved_at = CURRENT_TIMESTAMP WHERE alert_id = ?",
+                    """UPDATE Alerts SET alert_status = 'RESOLVED', alert_resolved_at = CURRENT_TIMESTAMP
+                       WHERE alert_id = ?""",
                     (open_alert["alert_id"],),
                 )
                 print(f"{name}: back under the limit, alert #{open_alert['alert_id']} resolved")
@@ -236,6 +254,24 @@ def handle_reading(fridge_id, temp, humidity):
 
     if new_alert:
         send_alert(*new_alert)
+
+
+def handle_sensor_value(fridge_id, kind, value):
+    column = SENSOR_COLUMNS[kind]
+    if kind in ("motion", "light_detected"):
+        value = 1 if value else 0
+    elif kind == "battery":
+        value = max(0, min(100, int(value)))
+
+    with db() as conn:
+        if conn.execute("SELECT 1 FROM Fridges WHERE fridge_id = ?", (fridge_id,)).fetchone() is None:
+            print(f"Fridge {fridge_id} isn't in the Fridges table - ignoring {kind}")
+            return
+        conn.execute(
+            f"INSERT INTO SensorReadings (fridge_id, {column}) VALUES (?, ?)",
+            (fridge_id, value),
+        )
+    print(f"Fridge {fridge_id} sensor: {kind} = {value}")
 
 
 # ---------------------------------- Email ----------------------------------
@@ -261,22 +297,36 @@ def send_alert(alert_id, fridge, temp, message, recipients):
     except Exception as e:
         print(f"Couldn't connect to Gmail SMTP: {e}")
 
+    title = f"Fridge alert: {fridge['fridge_name']}"
+    brief = f"{fridge['fridge_name']} is at {temp}°C (max {fridge['fridge_max_temperature']}°C)."
+
     with db() as conn:
         for addr, user_id in recipients:
             if user_id is None:
-                print(f"{addr} isn't in Users - email only, no Notifications row")
-            elif addr in sent:
-                conn.execute(
-                    """INSERT INTO Notifications (alert_id, user_id, notification_type, notification_status, notification_sent_at)
-                       VALUES (?, ?, 'email', 'sent', CURRENT_TIMESTAMP)""",
-                    (alert_id, user_id),
-                )
-            else:
-                conn.execute(
-                    """INSERT INTO Notifications (alert_id, user_id, notification_type, notification_status)
-                       VALUES (?, ?, 'email', 'failed')""",
-                    (alert_id, user_id),
-                )
+                print(f"{addr} isn't in Users - email only, no EMAIL notification row")
+                continue
+            ok = addr in sent
+            conn.execute(
+                """INSERT INTO Notifications
+                       (alert_id, user_id, notification_type, notification_title, notification_summary,
+                        notification_message_brief, notification_message_full,
+                        notification_status, notification_sent_at)
+                   VALUES (?, ?, 'EMAIL', ?, ?, ?, ?, ?, CASE WHEN ? THEN CURRENT_TIMESTAMP END)""",
+                (alert_id, user_id, title, f"Email to {addr}", brief, message,
+                 "SENT" if ok else "FAILED", ok),
+            )
+
+        # Dashboard notification for every admin, whether or not they got the email.
+        for admin in conn.execute("SELECT user_id FROM Users WHERE user_role = 'admin'"):
+            conn.execute(
+                """INSERT INTO Notifications
+                       (alert_id, user_id, notification_type, notification_title, notification_summary,
+                        notification_message_brief, notification_message_full,
+                        notification_status, notification_sent_at)
+                   VALUES (?, ?, 'ALERT', ?, ?, ?, ?, 'SENT', CURRENT_TIMESTAMP)""",
+                (alert_id, admin["user_id"], title,
+                 f"Email sent to {len(sent)}/{len(recipients)} address(es)", brief, message),
+            )
 
     print(f"Alert #{alert_id} emailed to {len(sent)}/{len(recipients)} address(es)")
     show_system_notification(
@@ -360,30 +410,34 @@ def handle_reply(from_addr, subject, body):
 
     with db() as conn:
         alert = conn.execute(
-            "SELECT fridge_id, alert_status, alert_acknowledged_at FROM Alerts WHERE alert_id = ?",
+            """SELECT Readings.fridge_id, Alerts.alert_status
+               FROM Alerts
+               JOIN Readings ON Readings.reading_id = Alerts.reading_id
+               WHERE Alerts.alert_id = ?""",
             (alert_id,),
         ).fetchone()
         if alert is None:
             print(f"  -> alert #{alert_id} doesn't exist - ignoring reply")
             return
-        # Don't depend on the exact default value of alert_status (it may be NULL,
-        # 'unacknowledged', 'open', ...). An alert is still open if nobody has
-        # acknowledged it yet and it hasn't been expired by a restart.
-        if alert["alert_acknowledged_at"] is not None or alert["alert_status"] == "expired":
-            print(f"  -> alert #{alert_id} already handled ({alert['alert_status']}) - ignoring reply")
+        # A resolved alert (fridge cooled down, or cleared by a restart) is closed.
+        # An alert acknowledged on the dashboard can still be answered by email.
+        if alert["alert_status"] == "RESOLVED":
+            print(f"  -> alert #{alert_id} already resolved - ignoring reply")
             return
 
         user_id = find_user_id(conn, from_addr)
         conn.execute(
-            """UPDATE Alerts SET alert_status = ?, alert_acknowledged_at = CURRENT_TIMESTAMP,
-                                 alert_acknowledged_by = ?
+            """UPDATE Alerts SET alert_status = 'ACKNOWLEDGED',
+                                 alert_acknowledged_at = COALESCE(alert_acknowledged_at, CURRENT_TIMESTAMP),
+                                 alert_acknowledged_by = COALESCE(alert_acknowledged_by, ?)
                WHERE alert_id = ?""",
-            ("acknowledged" if said_yes else "declined", user_id, alert_id),
+            (user_id, alert_id),
         )
         if user_id is not None:
             conn.execute(
-                """UPDATE Notifications SET notification_read_at = CURRENT_TIMESTAMP
-                   WHERE alert_id = ? AND user_id = ?""",
+                """UPDATE Notifications SET notification_status = 'READ',
+                                            notification_read_at = CURRENT_TIMESTAMP
+                   WHERE alert_id = ? AND user_id = ? AND notification_status = 'SENT'""",
                 (alert_id, user_id),
             )
         if said_yes:
@@ -413,9 +467,7 @@ def check_inbox():
     global last_uid
     with db() as conn:
         waiting = conn.execute(
-            """SELECT 1 FROM Alerts
-               WHERE alert_acknowledged_at IS NULL AND COALESCE(alert_status, '') != 'expired'
-               LIMIT 1"""
+            "SELECT 1 FROM Alerts WHERE alert_status != 'RESOLVED' LIMIT 1"
         ).fetchone()
     if not waiting:
         return

@@ -27,6 +27,7 @@ import Settings from "./pages/settings";
 import Testing from "./pages/testing";
 import UserRoles from "./pages/userRoles";
 import Reports from "./pages/reports";
+import Overview from "./pages/overview";
 
 // COMPONENTS:
 import NavBar from "./layout/navbar";
@@ -65,7 +66,7 @@ function AppContent() {
         <Route path="/customer/settings" element={<Settings />} />
 
         {/* Admin dashboard */}
-        <Route path="/dashboard" element={<p>Create overview of all dashboards(generalized stats)</p>} />
+        <Route path="/dashboard" element={<Overview />} />
         <Route path="/dashboard/inventory" element={<ProductDashboard />} />
         <Route path="/dashboard/reports" element={<Reports />} />
         <Route path="/dashboard/fridges" element={<FridgeDashboard />} />

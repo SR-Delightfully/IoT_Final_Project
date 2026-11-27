@@ -13,6 +13,8 @@ PRODUCT_QUERY = """
         p.category_id,
         c.category_name AS product_category,
         c.category_image_url,
+        COALESCE(c.category_low_threshold, 5) AS category_low_threshold,
+        COALESCE(c.category_moderate_threshold, 15) AS category_moderate_threshold,
         p.product_price_cents,
         ROUND(p.product_price_cents / 100.0, 2) AS product_price,
         b.barcode_value AS product_barcode,
@@ -110,10 +112,29 @@ def _set_barcode(conn, product_id, upc):
 def get_categories():
     with db_connection() as conn:
         rows = conn.execute(
-            "SELECT category_id, category_name FROM Categories ORDER BY category_name"
+            """
+            SELECT category_id, category_name,
+                   category_low_threshold, category_moderate_threshold
+            FROM Categories
+            ORDER BY category_name
+            """
         ).fetchall()
 
         return [dict(row) for row in rows]
+
+
+# Stock levels per category: at or below low = red, at or below moderate = yellow.
+def update_category_thresholds(category_id, low, moderate):
+    with db_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE Categories
+            SET category_low_threshold = ?, category_moderate_threshold = ?
+            WHERE category_id = ?
+            """,
+            (low, moderate, category_id)
+        )
+        return cursor.rowcount > 0
 
 
 class TagError(ValueError):

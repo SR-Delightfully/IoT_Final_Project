@@ -104,3 +104,90 @@ def get_daily_sales(start_date=None, end_date=None):
         ).fetchall()
 
         return [dict(row) for row in rows]
+
+# Customer activity for a date range (or one day when start == end).
+# New customer = their first completed purchase ever falls inside the range.
+# Returning customer = they also bought before the range.
+# Shoppers per day = distinct customers + guest checkouts (no account).
+def get_customer_activity(start_date=None, end_date=None):
+    from datetime import date, timedelta
+
+    with db_connection() as conn:
+        bounds = conn.execute(
+            """
+            SELECT MIN(DATE(purchase_created_at)) AS first_day,
+                   MAX(DATE(purchase_created_at)) AS last_day
+            FROM Purchases
+            WHERE purchase_status = 'COMPLETED'
+            """
+        ).fetchone()
+
+        today = date.today().isoformat()
+        start = start_date or bounds["first_day"] or today
+        end = end_date or max(bounds["last_day"] or today, today)
+
+        purchases = conn.execute(
+            """
+            SELECT DATE(pu.purchase_created_at) AS day,
+                   pu.customer_id,
+                   first.first_day
+            FROM Purchases pu
+            LEFT JOIN (
+                SELECT customer_id, MIN(DATE(purchase_created_at)) AS first_day
+                FROM Purchases
+                WHERE purchase_status = 'COMPLETED' AND customer_id IS NOT NULL
+                GROUP BY customer_id
+            ) first ON first.customer_id = pu.customer_id
+            WHERE pu.purchase_status = 'COMPLETED'
+              AND DATE(pu.purchase_created_at) BETWEEN ? AND ?
+            """,
+            (start, end)
+        ).fetchall()
+
+    customers = {}          # customer_id -> first purchase day
+    guest_checkouts = 0
+    daily_customers = {}    # day -> set of customer ids
+    daily_guests = {}       # day -> guest checkout count
+
+    for row in purchases:
+        if row["customer_id"] is None:
+            guest_checkouts += 1
+            daily_guests[row["day"]] = daily_guests.get(row["day"], 0) + 1
+        else:
+            customers[row["customer_id"]] = row["first_day"]
+            daily_customers.setdefault(row["day"], set()).add(row["customer_id"])
+
+    new_customers = sum(1 for first_day in customers.values() if first_day >= start)
+
+    # Every calendar day counts, so a day with nobody can be the quietest.
+    daily = []
+    day = date.fromisoformat(start)
+    last = date.fromisoformat(end)
+
+    while day <= last:
+        key = day.isoformat()
+        members = len(daily_customers.get(key, ()))
+        guests = daily_guests.get(key, 0)
+        daily.append({
+            "date": key,
+            "customers": members,
+            "guests": guests,
+            "shoppers": members + guests,
+        })
+        day += timedelta(days=1)
+
+    busiest = max(daily, key=lambda d: d["shoppers"]) if daily else None
+    quietest = min(daily, key=lambda d: d["shoppers"]) if daily else None
+
+    return {
+        "start_date": start,
+        "end_date": end,
+        "total_customers": len(customers),
+        "new_customers": new_customers,
+        "returning_customers": len(customers) - new_customers,
+        "guest_checkouts": guest_checkouts,
+        "total_shoppers": len(customers) + guest_checkouts,
+        "busiest_day": busiest,
+        "quietest_day": quietest,
+        "daily": daily,
+    }

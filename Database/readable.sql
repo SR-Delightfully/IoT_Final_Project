@@ -22,7 +22,13 @@ CREATE TABLE IF NOT EXISTS Categories (
     category_description TEXT,
     category_icon TEXT,
     category_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    category_image_url TEXT
+    category_image_url TEXT,
+    -- Stock levels for the inventory report: at or below low = red,
+    -- at or below moderate = yellow, above = green.
+    category_low_threshold INTEGER NOT NULL DEFAULT 5
+        CHECK (category_low_threshold >= 0),
+    category_moderate_threshold INTEGER NOT NULL DEFAULT 15
+        CHECK (category_moderate_threshold >= 0)
 );
 
 CREATE TABLE IF NOT EXISTS Rewards (
@@ -48,6 +54,8 @@ CREATE TABLE IF NOT EXISTS Fridges (
     fridge_max_humidity REAL NOT NULL,
     fridge_fan_on INTEGER NOT NULL DEFAULT 0
         CHECK (fridge_fan_on IN (0, 1)),
+    -- Who turned the fan on: 'email' (reply YES) or 'dashboard'.
+    fridge_fan_source TEXT,
     fridge_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CHECK (fridge_min_temperature <= fridge_max_temperature),
@@ -307,6 +315,26 @@ CREATE TABLE IF NOT EXISTS SessionItems (
         ON DELETE RESTRICT
 );
 
+-- Minew MSP01 BLE sensor values that arrive outside the temperature/humidity pair.
+CREATE TABLE IF NOT EXISTS SensorReadings (
+    sensor_reading_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fridge_id INTEGER NOT NULL,
+    sensor_motion INTEGER
+        CHECK (sensor_motion IN (0, 1)),
+    sensor_light REAL
+        CHECK (sensor_light >= 0),
+    sensor_light_detected INTEGER
+        CHECK (sensor_light_detected IN (0, 1)),
+    sensor_battery INTEGER
+        CHECK (sensor_battery BETWEEN 0 AND 100),
+    sensor_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (fridge_id)
+        REFERENCES Fridges(fridge_id)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
 -- Alerts are dire notifications meant only for staff and admin.
 CREATE TABLE IF NOT EXISTS Alerts (
     alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -544,6 +572,9 @@ CREATE INDEX IF NOT EXISTS idx_redemptions_reward
 
 CREATE INDEX IF NOT EXISTS idx_readings_fridge_date
     ON Readings(fridge_id, reading_created_at);
+
+CREATE INDEX IF NOT EXISTS idx_sensor_readings_fridge_date
+    ON SensorReadings(fridge_id, sensor_created_at);
 
 CREATE INDEX IF NOT EXISTS idx_alerts_reading
     ON Alerts(reading_id);

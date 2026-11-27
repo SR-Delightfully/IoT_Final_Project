@@ -18,7 +18,16 @@ PubSubClient client(espClient);
 float temperature = 0;
 float humidity = 0;
 int battery = 0;
-bool newSensorData = false;
+bool motionDetected = false;
+bool lightDetected = false;
+uint16_t lightLevel = 0;
+
+// Which values arrived since the last publish
+bool newSensorData = false;   // temperature + humidity
+bool newMotion = false;
+bool newLight = false;
+bool newLightDetected = false;
+bool newBattery = false;
 
 // Bluetooth scanner
 NimBLEScan* pBLEScan;
@@ -103,7 +112,24 @@ void reconnect() {
 }
 
 
-// Decode Bluetooth temperature and humidity
+// Read a signed 16-bit big-endian value in Q8.8 fixed point (e.g. 0xFF00 = -1.0)
+float readSigned88(const std::string& data, size_t offset) {
+  int16_t raw = (int16_t)(((uint8_t)data[offset] << 8) | (uint8_t)data[offset + 1]);
+  return raw / 256.0f;
+}
+
+uint16_t readUInt16(const std::string& data, size_t offset) {
+  return ((uint8_t)data[offset] << 8) | (uint8_t)data[offset + 1];
+}
+
+// Decode one Minew MSP01 frame. The sensor rotates through the frames it is
+// configured to send (in Minew BeaconSET), so each scan may see a different one.
+//   A1 01  temperature + humidity   (13 bytes)
+//   A1 02  visible light yes/no     (10 bytes)
+//   A1 05  illuminance in lux       (11 bytes)
+//   A1 11  PIR motion               (11 bytes)
+//   A1 19  photoresistor light      (11 bytes)
+// Every frame carries the battery percentage in byte 2.
 bool decodeSensorData(const NimBLEAdvertisedDevice* device){
 
   // Check if the device contains service data
@@ -114,39 +140,59 @@ bool decodeSensorData(const NimBLEAdvertisedDevice* device){
   // Retrieve Bluetooth service data
   std::string data = device->getServiceData();
 
-  // Check that the packet contains enough bytes & Verify the sensor data header
-  if (data.length() < 7 || (uint8_t)data[0] != 0xA1 || (uint8_t)data[1] != 0x01) {
+  // Every Minew frame starts with 0xA1, then the frame type
+  if (data.length() < 3 || (uint8_t)data[0] != 0xA1) {
     return false;
   }
 
-  // Extract battery percentage
+  uint8_t frameType = (uint8_t)data[1];
   battery = (uint8_t)data[2];
+  newBattery = true;
 
-  // Extract temperature (16-bit big-endian)
-  uint16_t tempRaw = ((uint8_t)data[3] << 8) | (uint8_t)data[4];
+  switch (frameType) {
 
-  // Convert temperature from Q8.8 format
-  temperature = tempRaw / 256.0f;
+    case 0x01:  // temperature + humidity
+      if (data.length() < 7) return false;
+      temperature = readSigned88(data, 3);
+      humidity = readSigned88(data, 5);
+      newSensorData = true;
+      Serial.printf("Temperature: %.2f  Humidity: %.2f
+", temperature, humidity);
+      break;
 
-  // Extract humidity (16-bit big-endian)
-  uint16_t humRaw = ((uint8_t)data[5] << 8) | (uint8_t)data[6];
+    case 0x02:  // visible light detected (yes/no)
+      if (data.length() < 4) return false;
+      lightDetected = ((uint8_t)data[3] & 0x01) == 0x01;
+      newLightDetected = true;
+      Serial.printf("Light detected: %s
+", lightDetected ? "yes" : "no");
+      break;
 
-  // Convert humidity from Q8.8 format
-  humidity = humRaw / 256.0f;
+    case 0x05:  // illuminance (lux)
+    case 0x19:  // photoresistor (luminous flux)
+      if (data.length() < 5) return false;
+      lightLevel = readUInt16(data, 3);
+      newLight = true;
+      Serial.printf("Light level: %u
+", lightLevel);
+      break;
 
-  // Display decoded readings
-  Serial.println("Bluetooth sensor information:");
+    case 0x11:  // PIR motion
+      if (data.length() < 5) return false;
+      motionDetected = (readUInt16(data, 3) & 0x0001) == 0x0001;
+      newMotion = true;
+      Serial.printf("Motion: %s
+", motionDetected ? "yes" : "no");
+      break;
 
-  Serial.print("Temperature: ");
-  Serial.println(temperature);
+    default:
+      Serial.printf("Ignoring Minew frame type 0x%02X
+", frameType);
+      return false;
+  }
 
-  Serial.print("Humidity: ");
-  Serial.println(humidity);
-
-  Serial.print("Battery: ");
-  Serial.print(battery);
-  Serial.println("%");
-
+  Serial.printf("Battery: %d%%
+", battery);
   return true;
 }
 
@@ -186,10 +232,8 @@ void scanBluetooth() {
 
     Serial.println("Target Bluetooth sensor detected!");
 
-    // Decode sensor readings
-    if (decodeSensorData(device)) {
-      newSensorData = true;
-    }
+    // Decode sensor readings (sets the matching new... flag)
+    decodeSensorData(device);
   }
 
   // Clear previous scan results
@@ -233,6 +277,37 @@ void loop() {
 
     // Reset the flag
     newSensorData = false;
+  }
+
+  // MSP01 extras: motion, light and battery go on their own topics
+  char valueString[16];
+
+  if (newMotion) {
+    client.publish("fridge/3/motion", motionDetected ? "1" : "0");
+    Serial.printf("Publishing Motion: %d
+", motionDetected);
+    newMotion = false;
+  }
+
+  if (newLight) {
+    snprintf(valueString, sizeof(valueString), "%u", lightLevel);
+    client.publish("fridge/3/light", valueString);
+    Serial.printf("Publishing Light: %s
+", valueString);
+    newLight = false;
+  }
+
+  if (newLightDetected) {
+    client.publish("fridge/3/light_detected", lightDetected ? "1" : "0");
+    Serial.printf("Publishing Light detected: %d
+", lightDetected);
+    newLightDetected = false;
+  }
+
+  if (newBattery) {
+    snprintf(valueString, sizeof(valueString), "%d", battery);
+    client.publish("fridge/3/battery", valueString);
+    newBattery = false;
   }
 
   delay(2000);

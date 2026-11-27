@@ -541,3 +541,164 @@
     transform: rotate(360deg);
   }
 }
+
+/* Who turned the fan on (email reply or dashboard) */
+.fridge-fan-source {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--gold-7);
+  text-transform: uppercase;
+}
+
+.fan-toggle:disabled,
+.fridge-save-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* ---------- MSP01 environment sensor panel ---------- */
+.sensor-card {
+  border: 1px solid var(--tone-4);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: var(--tone-1);
+}
+
+.sensor-card + .sensor-card {
+  margin-top: 1rem;
+}
+
+.sensor-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.sensor-card-header h3 {
+  margin: 0;
+  color: var(--tone-9);
+}
+
+.sensor-card-location {
+  font-size: 0.8rem;
+  color: var(--tone-8);
+}
+
+.sensor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--tone-8);
+}
+
+.sensor-status.is-online {
+  color: var(--gold-7);
+}
+
+.sensor-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}
+
+.sensor-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem;
+  border: 1px solid var(--tone-3);
+  border-radius: 0.6rem;
+  background: var(--tone-2);
+}
+
+.sensor-tile.is-alert {
+  border-color: #c0392b;
+}
+
+.sensor-tile-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tone-8);
+}
+
+.sensor-tile-value {
+  font-size: 1.35rem;
+  color: var(--tone-9);
+}
+
+.sensor-tile.is-alert .sensor-tile-value {
+  color: #e74c3c;
+}
+
+.sensor-tile-detail {
+  font-size: 0.75rem;
+  color: var(--tone-8);
+}
+
+.sensor-battery {
+  display: block;
+  height: 0.4rem;
+  border-radius: 1rem;
+  background: var(--tone-4);
+  overflow: hidden;
+}
+
+.sensor-battery-fill {
+  display: block;
+  height: 100%;
+  background: var(--gold-6);
+}
+
+.sensor-battery-fill.is-low {
+  background: #e74c3c;
+}
+
+/* The MSP01 panel sits above the fridge cards and never grows the page grid */
+.environment-sensor {
+  flex: 0 0 auto;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.environment-sensor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.environment-sensor .sensor-card {
+  padding: 0.7rem;
+}
+
+.environment-sensor .sensor-tiles {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.environment-sensor .sensor-tile {
+  padding: 0.55rem;
+}
+
+.environment-sensor .sensor-tile-value {
+  font-size: 1.1rem;
+}
+
+@media (max-width: 1100px) {
+  .environment-sensor .sensor-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .environment-sensor .sensor-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

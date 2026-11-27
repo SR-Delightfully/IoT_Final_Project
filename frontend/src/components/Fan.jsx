@@ -1,5 +1,5 @@
 
-function Fan({ status, onToggle }) {
+function Fan({ status, onToggle, disabled = false }) {
   const isOn = String(status ?? "OFF").toUpperCase() === "ON";
 
   return (
@@ -45,6 +45,7 @@ function Fan({ status, onToggle }) {
             type="button"
             className="fan-toggle"
             onClick={onToggle}
+            disabled={disabled}
             aria-pressed={isOn}
           >
             {isOn ? "POWER OFF" : "POWER ON"}

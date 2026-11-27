@@ -582,3 +582,37 @@
   height: auto;
   border-radius: 0.25rem;
 }
+
+/* Reports page tabs (Sales / Customer Activity) */
+.report-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+  border-bottom: 1px solid var(--tone-4);
+}
+
+.report-tab {
+  padding: 0.55rem 1.1rem;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--tone-8);
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--transition-2), border-color var(--transition-2);
+}
+
+.report-tab:hover {
+  color: var(--tone-9);
+}
+
+.report-tab.is-active {
+  color: var(--gold-7);
+  border-bottom-color: var(--gold-6);
+}
+
+.customer-activity-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
