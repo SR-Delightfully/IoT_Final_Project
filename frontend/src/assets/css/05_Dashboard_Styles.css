@@ -1395,3 +1395,54 @@ html {
     min-height: 14rem;
   }
 }
+
+/* =========================================
+   INDEPENDENT FRIDGE CARD SCROLLING
+========================================= */
+
+.dashboard-page > #fridges {
+    display: flex;
+    flex-direction: column;
+
+    min-height: 0;
+    height: 100%;
+
+    overflow: hidden;
+}
+
+.dashboard-page > #fridges .fridge-grid {
+    display: grid;
+
+    /* Two fridge cards per row */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* Additional cards create additional rows */
+    grid-auto-rows: max-content;
+
+    align-content: start;
+
+    gap: 0.55rem;
+
+    /* Allow the grid to occupy the remaining panel height */
+    flex: 1 1 0;
+    min-height: 0;
+
+    /* Enable independent vertical scrolling */
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    /* Prevent scrolling from propagating */
+    overscroll-behavior: contain;
+
+    padding-right: 0.4rem;
+
+    scrollbar-width: thin;
+}
+
+/* Prevent individual cards from stretching */
+.dashboard-page > #fridges .fridge-grid > .fridge-card {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+}
