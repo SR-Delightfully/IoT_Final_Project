@@ -1,10 +1,12 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit, parse_qs
 import json
 import secrets
 import sqlite3
 import sys
+from datetime import date
 
-from models.database import init_db, DB_FILE
+from models.database import init_db, DB_FILE, get_connection
 from models.checkout_models.model_products import (
     add_product_with_barcode,
     update_product_with_barcode,
@@ -33,7 +35,7 @@ from models.user_model import (
     update_user_name,
     change_password
 )
-from models.purchase_model import get_customer_points, get_customer_purchases
+from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history
 from models.product_model import (
     get_active_products,
     get_all_products,
@@ -210,8 +212,11 @@ class Server(BaseHTTPRequestHandler):
     # ---------- GET ----------
 
     def do_GET(self):
-        path = self.path.split("?")[0].rstrip("/")
+        # Read the route before "?" and the date filters after "?" separately.
+        parsed_url = urlsplit(self.path)
+        path = parsed_url.path.rstrip("/")
         parts = path.strip("/").split("/")
+        query_params = parse_qs(parsed_url.query)
 
         # Public product catalogue (active products only)
         if path == "/products":
@@ -228,6 +233,42 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(200, get_all_products())
             return
 
+        # Active loyalty rewards for the signed-in customer.
+        if path == "/loyalty/rewards":
+            user = self.require_user()
+            if not user:
+                return
+
+            customer = get_customer_by_user_id(user["user_id"])
+            if customer is None:
+                self.send_json(404, {"error": "Customer account not found"})
+                return
+
+            if not customer.get("customer_is_member"):
+                self.send_json(403, {"error": "This account is not enrolled in the loyalty program"})
+                return
+
+            try:
+                with get_connection() as conn:
+                    rewards = conn.execute(
+                        """
+                        SELECT reward_id, reward_name, reward_description,
+                               reward_image_url, reward_points_cost
+                        FROM Rewards
+                        WHERE reward_is_active = 1
+                        ORDER BY reward_points_cost, reward_name
+                        """
+                    ).fetchall()
+
+                self.send_json(200, {
+                    "points": get_customer_points(customer["customer_id"]),
+                    "rewards": [dict(reward) for reward in rewards]
+                })
+            except Exception as error:
+                print(f"Loyalty rewards error: {error}")
+                self.send_json(500, {"error": "Could not load loyalty rewards"})
+            return
+
         # The logged-in user's own details (used by the nav bar and settings page)
         if path == "/me":
             user = self.require_user()
@@ -235,8 +276,8 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(200, self.user_details(user))
             return
 
-        # Account page: customer info, loyalty points and purchase history
-        if path == "/me/account":
+        # Both routes share login, customer lookup and date validation.
+        if path in ("/me/account", "/me/account/product-history"):
             user = self.require_user()
             if not user:
                 return
@@ -247,10 +288,76 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Customer account not found"})
                 return
 
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+
+            if start_date is not None and end_date is not None:
+                if start_date > end_date:
+                    self.send_json(
+                        400,
+                        {"error": "Start date must be on or before end date."}
+                    )
+                    return
+
+            # Product history runs after the customer and dates are known.
+            if path == "/me/account/product-history":
+                try:
+                    product_id = int(query_params.get("product_id", [""])[0])
+                    if product_id <= 0:
+                        raise ValueError
+                except ValueError:
+                    self.send_json(400, {"error": "A valid product_id is required"})
+                    return
+
+                history = get_customer_product_history(
+                    customer["customer_id"],
+                    product_id,
+                    start_date,
+                    end_date
+                )
+
+                purchase_count = len({item["purchase_id"] for item in history})
+                total_quantity = sum(
+                    item["purchase_item_quantity"] for item in history
+                )
+
+                self.send_json(200, {
+                    "product_id": product_id,
+                    "purchase_count": purchase_count,
+                    "total_quantity": total_quantity,
+                    "history": history
+                })
+                return
+
+            # Account history and spending total.
+            purchases = get_customer_purchases(
+                customer["customer_id"],
+                start_date,
+                end_date
+            )
+
+            total_spent_cents = 0
+
+            for purchase in purchases:
+                if purchase["purchase_payment_status"] == "paid":
+                    total_spent_cents += purchase["purchase_total"]
+
             self.send_json(200, {
                 "customer": customer,
                 "points": get_customer_points(customer["customer_id"]),
-                "purchases": get_customer_purchases(customer["customer_id"])
+                "purchases": purchases,
+                "total_spent_cents": total_spent_cents
             })
             return
 
@@ -633,6 +740,18 @@ class Server(BaseHTTPRequestHandler):
             self.login_user()
             return
 
+        if len(parts) == 4 and parts[0] == "checkout" and parts[1] == "session" and parts[3] == "login":
+            self.login_checkout_customer(int(parts[2]) if parts[2].isdigit() else None)
+            return
+
+        if path == "/loyalty/redeem":
+            self.redeem_loyalty_reward()
+            return
+
+        if path == "/checkout/authorize-employee":
+            self.authorize_employee_adjustment()
+            return
+
         if path == "/products":
             self.create_product()
             return
@@ -764,6 +883,87 @@ class Server(BaseHTTPRequestHandler):
             "user": user
         })
 
+    def login_checkout_customer(self, session_id):
+        if session_id is None:
+            self.send_json(400, {"error": "Invalid checkout session ID"})
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        email = data.get("email")
+        password = data.get("password")
+
+        if not isinstance(email, str) or not email.strip() or not isinstance(password, str) or not password:
+            self.send_json(400, {"error": "Email and password are required"})
+            return
+
+        try:
+            user = authenticate_user(email.strip(), password)
+            if not user:
+                self.send_json(401, {"error": "Incorrect email or password"})
+                return
+
+            customer = get_customer_by_user_id(user["user_id"])
+            if customer is None:
+                self.send_json(404, {"error": "Customer account not found"})
+                return
+
+            with get_connection() as conn:
+                session = conn.execute(
+                    """
+                    SELECT session_status
+                    FROM SelfCheckoutSessions
+                    WHERE session_id = ?
+                    """,
+                    (session_id,)
+                ).fetchone()
+
+                if session is None or session["session_status"] != "ACTIVE":
+                    self.send_json(404, {"error": "Active checkout session not found"})
+                    return
+
+                conn.execute(
+                    """
+                    UPDATE SelfCheckoutSessions
+                    SET user_id = ?
+                    WHERE session_id = ?
+                    """,
+                    (user["user_id"], session_id)
+                )
+
+                membership = conn.execute(
+                    """
+                    SELECT customer_membership_points
+                    FROM CustomerMemberships
+                    WHERE customer_id = ?
+                    """,
+                    (customer["customer_id"],)
+                ).fetchone()
+
+                account = {
+                    "customer_id": customer["customer_id"],
+                    "is_member": bool(customer.get("customer_is_member", 0)),
+                    "user_id": user["user_id"],
+                    "first_name": user["user_fname"],
+                    "last_name": user["user_lname"],
+                    "email": user["user_email"],
+                    "loyalty_points": membership["customer_membership_points"] if membership else 0
+                }
+
+            self.send_json(200, {
+                "message": "Signed in successfully",
+                "account": account
+            })
+
+        except sqlite3.Error as error:
+            print(f"Checkout login database error: {error}")
+            self.send_json(500, {"error": "Could not sign in"})
+        except Exception as error:
+            print(f"Checkout login error: {error}")
+            self.send_json(500, {"error": "Could not sign in"})
+
     def register_customer(self):
         try:
             data = self.read_json()
@@ -826,6 +1026,177 @@ class Server(BaseHTTPRequestHandler):
             hardware_feedback(False)
             print(f"Registration error: {error}")
             self.send_json(500, {"error": "Could not add customer"})
+
+    def authorize_employee_adjustment(self):
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        employee = self.get_employee_by_id(data.get("employee_id"))
+        if employee is None:
+            self.send_json(403, {"error": "Employee ID not recognized or not authorized"})
+            return
+
+        self.send_json(200, {
+            "authorized": True,
+            "employee": {
+                "user_id": employee["user_id"],
+                "name": f"{employee['user_fname']} {employee['user_lname']}"
+            }
+        })
+
+    @staticmethod
+    def get_employee_by_id(employee_id):
+        if isinstance(employee_id, bool):
+            return None
+
+        try:
+            employee_id = int(str(employee_id).strip())
+        except (TypeError, ValueError):
+            return None
+
+        if employee_id <= 0:
+            return None
+
+        with get_connection() as conn:
+            employee = conn.execute(
+                """
+                SELECT user_id, user_role, user_fname, user_lname
+                FROM Users
+                WHERE user_id = ?
+                  AND user_role IN ('employee', 'admin')
+                """,
+                (employee_id,)
+            ).fetchone()
+
+        return dict(employee) if employee else None
+
+    def redeem_loyalty_reward(self):
+        user = self.require_user()
+        if not user:
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        reward_id = data.get("reward_id")
+        if isinstance(reward_id, bool) or not str(reward_id).isdigit():
+            self.send_json(400, {"error": "A valid reward ID is required"})
+            return
+
+        customer = get_customer_by_user_id(user["user_id"])
+        if customer is None:
+            self.send_json(404, {"error": "Customer account not found"})
+            return
+
+        if not customer.get("customer_is_member"):
+            self.send_json(403, {"error": "This account is not enrolled in the loyalty program"})
+            return
+
+        conn = get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+
+            reward = conn.execute(
+                """
+                SELECT reward_id, reward_name, reward_description,
+                       reward_points_cost
+                FROM Rewards
+                WHERE reward_id = ? AND reward_is_active = 1
+                """,
+                (int(reward_id),)
+            ).fetchone()
+
+            if reward is None:
+                conn.rollback()
+                self.send_json(404, {"error": "Reward is no longer available"})
+                return
+
+            membership = conn.execute(
+                """
+                SELECT customer_membership_points
+                FROM CustomerMemberships
+                WHERE customer_id = ?
+                """,
+                (customer["customer_id"],)
+            ).fetchone()
+
+            if membership is None:
+                conn.rollback()
+                self.send_json(409, {"error": "Loyalty membership could not be found"})
+                return
+
+            points_cost = reward["reward_points_cost"]
+            current_points = membership["customer_membership_points"]
+            if current_points < points_cost:
+                conn.rollback()
+                self.send_json(400, {"error": "You do not have enough points for this reward"})
+                return
+
+            conn.execute(
+                """
+                UPDATE CustomerMemberships
+                SET customer_membership_points = customer_membership_points - ?,
+                    customer_membership_updated_at = CURRENT_TIMESTAMP
+                WHERE customer_id = ?
+                """,
+                (points_cost, customer["customer_id"])
+            )
+
+            transaction_id = conn.execute(
+                """
+                INSERT INTO LoyaltyTransactions (
+                    customer_id,
+                    loyalty_transaction_type,
+                    loyalty_points_change,
+                    loyalty_transaction_description
+                )
+                VALUES (?, 'REDEEM', ?, ?)
+                """,
+                (
+                    customer["customer_id"],
+                    -points_cost,
+                    f"Redeemed reward: {reward['reward_name']}"
+                )
+            ).lastrowid
+
+            redemption_id = conn.execute(
+                """
+                INSERT INTO RewardRedemptions (
+                    reward_id,
+                    loyalty_transaction_id,
+                    redemption_status
+                )
+                VALUES (?, ?, 'COMPLETED')
+                """,
+                (int(reward_id), transaction_id)
+            ).lastrowid
+
+            balance = conn.execute(
+                """
+                SELECT customer_membership_points
+                FROM CustomerMemberships
+                WHERE customer_id = ?
+                """,
+                (customer["customer_id"],)
+            ).fetchone()["customer_membership_points"]
+
+            conn.commit()
+            self.send_json(201, {
+                "message": "Reward redeemed successfully",
+                "redemption_id": redemption_id,
+                "reward": dict(reward),
+                "points_redeemed": points_cost,
+                "points_balance": balance
+            })
+
+        except Exception as error:
+            conn.rollback()
+            print(f"Loyalty redemption error: {error}")
+            self.send_json(500, {"error": "Could not redeem this reward"})
+        finally:
+            conn.close()
 
     def add_product_route(self):
         if not self.require_admin():
@@ -1085,6 +1456,25 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "Invalid quantity"})
                 return
 
+            current_cart = self.checkout.get_cart(int(parts[2]))
+            if current_cart is None:
+                self.send_json(404, {"error": "Checkout session not found"})
+                return
+
+            current_item = next(
+                (item for item in current_cart["items"] if item["product_id"] == int(parts[4])),
+                None
+            )
+            if current_item is None:
+                self.send_json(404, {"error": "Cart item not found"})
+                return
+
+            if quantity < current_item["session_item_quantity"]:
+                employee = self.get_employee_by_id(data.get("employee_id"))
+                if employee is None:
+                    self.send_json(403, {"error": "Employee authorization is required to reduce item quantities"})
+                    return
+
             cart = self.checkout.set_quantity(int(parts[2]), int(parts[4]), quantity)
 
             if cart is False or cart is None:
@@ -1133,6 +1523,15 @@ class Server(BaseHTTPRequestHandler):
             return
 
         try:
+            data = self.read_json_or_400()
+            if data is None:
+                return
+
+            employee = self.get_employee_by_id(data.get("employee_id"))
+            if employee is None:
+                self.send_json(403, {"error": "Employee authorization is required to remove cart items"})
+                return
+
             cart = self.checkout.remove_from_session(int(parts[2]), int(parts[4]))
 
             if cart is False or cart is None:

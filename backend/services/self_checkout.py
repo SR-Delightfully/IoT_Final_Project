@@ -376,122 +376,105 @@ class SelfCheckout:
         self,
         session_id,
         customer_id=None,
-        payment_method="card"
+        payment_method="card",
+        redeem_points=0
     ):
+        if type(redeem_points) is not int or redeem_points < 0:
+            raise ValueError("Invalid loyalty points amount")
+        if redeem_points:
+            raise ValueError("Loyalty point redemption is not available yet")
+        if payment_method not in ("card", "cash", "mobile"):
+            raise ValueError("Invalid payment method")
+
         with get_connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
 
             session = conn.execute(
                 """
-                SELECT session_id, session_status
+                SELECT session_id, user_id, session_status
                 FROM SelfCheckoutSessions
                 WHERE session_id = ?
                 """,
                 (session_id,)
             ).fetchone()
-
             if session is None or session["session_status"] != "ACTIVE":
                 return False
 
-            if customer_id is not None:
+            linked_customer_id = None
+            if session["user_id"] is not None:
                 customer = conn.execute(
-                    """
-                    SELECT customer_id
-                    FROM Customers
-                    WHERE customer_id = ?
-                    """,
-                    (customer_id,)
+                    "SELECT customer_id FROM Customers WHERE user_id = ?",
+                    (session["user_id"],)
                 ).fetchone()
+                if customer:
+                    linked_customer_id = customer["customer_id"]
 
-                if customer is None:
-                    return False
+            if customer_id is not None and customer_id != linked_customer_id:
+                raise ValueError("The signed-in customer does not match this checkout session")
+
+            membership = None
+            if linked_customer_id is not None:
+                membership = conn.execute(
+                    """
+                    SELECT cm.customer_membership_points
+                    FROM CustomerMemberships AS cm
+                    JOIN Customers AS c ON c.customer_id = cm.customer_id
+                    WHERE cm.customer_id = ? AND c.customer_is_member = 1
+                    """,
+                    (linked_customer_id,)
+                ).fetchone()
 
             items = conn.execute(
                 """
-                SELECT
-                    p.product_id,
-                    p.product_name,
-                    p.product_price_cents,
-                    p.product_stock_quantity,
-                    si.session_item_quantity
+                SELECT p.product_id, p.product_name, p.product_price_cents,
+                       p.product_stock_quantity, si.session_item_quantity
                 FROM SessionItems AS si
-                JOIN Products AS p
-                    ON p.product_id = si.product_id
-                WHERE si.session_id = ?
-                    AND p.product_is_active = 1
+                JOIN Products AS p ON p.product_id = si.product_id
+                WHERE si.session_id = ? AND p.product_is_active = 1
                 """,
                 (session_id,)
             ).fetchall()
-
             if not items:
                 return False
 
             for item in items:
                 if item["session_item_quantity"] > item["product_stock_quantity"]:
-                    return False
+                    raise ValueError(f"Insufficient stock for {item['product_name']}")
 
             subtotal = sum(
                 item["product_price_cents"] * item["session_item_quantity"]
                 for item in items
             )
-
             gst = round(subtotal * 0.05)
             qst = round(subtotal * 0.09975)
             discount = 0
-            total = subtotal + gst + qst - discount
+            total = subtotal + gst + qst
 
             purchase_id = conn.execute(
                 """
                 INSERT INTO Purchases (
-                    customer_id,
-                    session_id,
-                    purchase_subtotal_cents,
-                    purchase_gst_cents,
-                    purchase_qst_cents,
-                    purchase_discount_cents,
-                    purchase_total_cents,
-                    purchase_payment_method,
-                    purchase_status
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')
+                    customer_id, session_id, purchase_subtotal_cents,
+                    purchase_gst_cents, purchase_qst_cents,
+                    purchase_discount_cents, purchase_total_cents,
+                    purchase_payment_method, purchase_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')
                 """,
-                (
-                    customer_id,
-                    session_id,
-                    subtotal,
-                    gst,
-                    qst,
-                    discount,
-                    total,
-                    payment_method
-                )
+                (linked_customer_id, session_id, subtotal, gst, qst, discount, total, payment_method)
             ).lastrowid
 
             purchase_items = {}
-
             for item in items:
                 quantity = item["session_item_quantity"]
-
                 purchase_item_id = conn.execute(
                     """
                     INSERT INTO PurchaseItems (
-                        purchase_id,
-                        product_id,
-                        purchase_item_quantity,
+                        purchase_id, product_id, purchase_item_quantity,
                         purchase_item_unit_price_cents
-                    )
-                    VALUES (?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?)
                     """,
-                    (
-                        purchase_id,
-                        item["product_id"],
-                        quantity,
-                        item["product_price_cents"]
-                    )
+                    (purchase_id, item["product_id"], quantity, item["product_price_cents"])
                 ).lastrowid
-
                 purchase_items[item["product_id"]] = purchase_item_id
-
                 conn.execute(
                     """
                     UPDATE Products
@@ -509,110 +492,74 @@ class SelfCheckout:
 
             for epc in tags_to_record:
                 tag = conn.execute(
-                    """
-                    SELECT product_tag_id, product_id
-                    FROM ProductTags
-                    WHERE UPPER(product_tag_epc) = ?
-                    """,
+                    "SELECT product_tag_id, product_id FROM ProductTags WHERE UPPER(product_tag_epc) = ?",
                     (epc.upper(),)
                 ).fetchone()
-
                 if tag is None or tag["product_id"] not in purchase_items:
                     continue
-
                 conn.execute(
                     """
-                    INSERT OR IGNORE INTO ProductTagSales (
-                        product_tag_id,
-                        purchase_item_id
-                    )
+                    INSERT OR IGNORE INTO ProductTagSales (product_tag_id, purchase_item_id)
                     VALUES (?, ?)
                     """,
-                    (
-                        tag["product_tag_id"],
-                        purchase_items[tag["product_id"]]
-                    )
+                    (tag["product_tag_id"], purchase_items[tag["product_id"]])
                 )
-            # Members earn 1 point per full dollar of the final total.
-            # Save the points and their history together with the purchase.
-            points_earned = 0
 
-            if customer_id is not None and total >= 100:
-                result = conn.execute(
+            points_earned = 0
+            if membership is not None and total >= 100:
+                points_earned = total // 100
+                conn.execute(
                     """
                     UPDATE CustomerMemberships
-                    SET customer_membership_points =
-                            customer_membership_points + ?,
+                    SET customer_membership_points = customer_membership_points + ?,
                         customer_membership_updated_at = CURRENT_TIMESTAMP
                     WHERE customer_id = ?
-                      AND customer_id IN (
-                          SELECT customer_id FROM Customers
-                          WHERE customer_is_member = 1
-                      )
                     """,
-                    (total // 100, customer_id)
+                    (points_earned, linked_customer_id)
+                )
+                conn.execute(
+                    """
+                    INSERT INTO LoyaltyTransactions (
+                        customer_id, purchase_id, loyalty_transaction_type,
+                        loyalty_points_change, loyalty_transaction_description
+                    ) VALUES (?, ?, 'EARN', ?, ?)
+                    """,
+                    (linked_customer_id, purchase_id, points_earned, "Points earned from purchase")
                 )
 
-                if result.rowcount == 1:
-                    points_earned = total // 100
+            points_balance = 0
+            if linked_customer_id is not None:
+                balance = conn.execute(
+                    "SELECT customer_membership_points FROM CustomerMemberships WHERE customer_id = ?",
+                    (linked_customer_id,)
+                ).fetchone()
+                if balance:
+                    points_balance = balance["customer_membership_points"]
 
-                    conn.execute(
-                        """
-                        INSERT INTO LoyaltyTransactions (
-                            customer_id,
-                            purchase_id,
-                            loyalty_transaction_type,
-                            loyalty_points_change,
-                            loyalty_transaction_description
-                        )
-                        VALUES (?, ?, 'EARN', ?, ?)
-                        """,
-                        (
-                            customer_id,
-                            purchase_id,
-                            points_earned,
-                            "Points earned from purchase"
-                        )
-                    )
-            
             receipt_number = f"ST-{purchase_id:08d}"
-
             receipt_id = conn.execute(
-                """
-                INSERT INTO Receipts (
-                    purchase_id,
-                    receipt_number
-                )
-                VALUES (?, ?)
-                """,
+                "INSERT INTO Receipts (purchase_id, receipt_number) VALUES (?, ?)",
                 (purchase_id, receipt_number)
             ).lastrowid
-
             conn.execute(
                 """
                 UPDATE SelfCheckoutSessions
-                SET session_status = 'COMPLETED',
-                    session_completed_at = CURRENT_TIMESTAMP
+                SET session_status = 'COMPLETED', session_completed_at = CURRENT_TIMESTAMP
                 WHERE session_id = ?
                 """,
                 (session_id,)
             )
 
             receipt = conn.execute(
-                """
-                SELECT *
-                FROM Receipts
-                WHERE receipt_id = ?
-                """,
+                "SELECT * FROM Receipts WHERE receipt_id = ?",
                 (receipt_id,)
             ).fetchone()
-
             receipt_data = dict(receipt)
-
             receipt_data.update({
                 # Include the points awarded for this purchase in the receipt.
                 "points_earned": points_earned,
                 "purchase_id": purchase_id,
+                "customer_id": linked_customer_id,
                 "items": [
                     {
                         "product_id": item["product_id"],
@@ -626,12 +573,12 @@ class SelfCheckout:
                 "gst": gst / 100,
                 "qst": qst / 100,
                 "discount": discount / 100,
-                "total": total / 100
+                "total": total / 100,
+                "loyalty_points_earned": points_earned,
+                "loyalty_points_balance": points_balance
             })
 
         self.session_tags.pop(session_id, None)
-
         if self.active_session_id == session_id:
             self.active_session_id = None
-
         return receipt_data
