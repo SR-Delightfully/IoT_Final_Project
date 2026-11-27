@@ -1,11 +1,12 @@
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlsplit, parse_qs
+from datetime import date, timedelta
 import json
 import os
 import secrets
 import sqlite3
 import sys
-from datetime import date
 
 from models.database import init_db, DB_FILE, get_connection
 from models.checkout_models.model_products import (
@@ -44,7 +45,11 @@ from models.user_model import (
     update_user_name,
     change_password
 )
-from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history
+from models.purchase_model import (
+    get_customer_points,
+    get_customer_purchases,
+    get_customer_product_history
+)
 from models.product_model import (
     get_active_products,
     get_all_products,
@@ -66,7 +71,10 @@ if sys.platform == "win32":
 else:
     from services import mqttProj
 
+
 ROLES = ("customer", "admin")
+
+SESSIONS = {}
 
 
 def hardware_feedback(*attempt):
@@ -74,9 +82,6 @@ def hardware_feedback(*attempt):
         login(*attempt)
     except Exception as error:
         print(f"Hardware feedback unavailable: {error}")
-
-
-SESSIONS = {}  # login token -> user_id
 
 
 class Server(BaseHTTPRequestHandler):
@@ -87,8 +92,14 @@ class Server(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header(
+            "Access-Control-Allow-Methods",
+            "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        )
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization"
+        )
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -96,11 +107,16 @@ class Server(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header(
+            "Access-Control-Allow-Methods",
+            "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        )
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization"
+        )
         self.end_headers()
 
-    # Raises ValueError / JSONDecodeError on a bad body
     def read_json(self):
         length = int(self.headers.get("Content-Length", 0))
 
@@ -114,12 +130,11 @@ class Server(BaseHTTPRequestHandler):
 
         return data
 
-    # Same as read_json, but answers 400 itself and returns None on a bad body
     def read_json_or_400(self):
         try:
             length = int(self.headers.get("Content-Length", 0))
             data = json.loads(self.rfile.read(length)) if length > 0 else None
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             data = None
 
         if not isinstance(data, dict):
@@ -130,7 +145,6 @@ class Server(BaseHTTPRequestHandler):
 
     # ---------- Login sessions ----------
 
-    # The user id behind the "Authorization: Bearer <token>" header
     def get_logged_in_user_id(self):
         auth_header = self.headers.get("Authorization", "")
         parts = auth_header.split()
@@ -139,7 +153,6 @@ class Server(BaseHTTPRequestHandler):
             return None
 
         return SESSIONS.get(parts[1])
-        
 
     def current_user(self):
         user_id = self.get_logged_in_user_id()
@@ -154,7 +167,6 @@ class Server(BaseHTTPRequestHandler):
 
         return user
 
-    # Only users with the 'admin' role can use the /admin routes
     def require_admin(self):
         user = self.current_user()
 
@@ -177,6 +189,7 @@ class Server(BaseHTTPRequestHandler):
         }
 
         customer = get_customer_by_user_id(user["user_id"])
+
         if customer:
             details["customer_phone"] = customer["customer_phone"]
             details["customer_address"] = customer["customer_address"]
@@ -195,8 +208,10 @@ class Server(BaseHTTPRequestHandler):
                 continue
 
             value = data[field]
+
             if not isinstance(value, str) or not value.strip():
                 return None, f"Invalid field: {field}"
+
             product[field] = value.strip()
 
         if "upc" in product and not (12 <= len(product["upc"]) <= 13):
@@ -204,19 +219,24 @@ class Server(BaseHTTPRequestHandler):
 
         if "price" in data or not partial:
             price = data.get("price")
+
             if type(price) is not int or price < 0:
                 return None, "Price must be a whole number of cents"
+
             product["price"] = price
 
         if "image_url" in data:
             image_url = data["image_url"]
+
             if image_url is not None and not isinstance(image_url, str):
                 return None, "Invalid field: image_url"
+
             product["image_url"] = (image_url or "").strip() or None
 
         if "active" in data:
             if type(data["active"]) is not bool:
                 return None, "Invalid field: active"
+
             product["active"] = 1 if data["active"] else 0
 
         return product, None
@@ -224,22 +244,187 @@ class Server(BaseHTTPRequestHandler):
     # ---------- GET ----------
 
     def do_GET(self):
-        # Read the route before "?" and the date filters after "?" separately.
         parsed_url = urlsplit(self.path)
         path = parsed_url.path.rstrip("/")
         parts = path.strip("/").split("/")
         query_params = parse_qs(parsed_url.query)
 
-        # Public product catalogue (active products only)
+        # Admin dashboard analytics
+        if path == "/admin/dashboard":
+            if not self.require_admin():
+                return
+
+            try:
+                users = [dict(user) for user in get_all_users()]
+                daily_users = {}
+                daily_sales = {}
+                total_sales = 0
+                total_purchases = 0
+                recent_purchases = []
+
+                today = date.today()
+
+                for user in users:
+                    created_at = user.get("user_created_at")
+
+                    if created_at:
+                        try:
+                            created_date = date.fromisoformat(str(created_at)[:10])
+                            key = created_date.isoformat()
+                            daily_users[key] = daily_users.get(key, 0) + 1
+                        except ValueError:
+                            pass
+
+                    customer = get_customer_by_user_id(user["user_id"])
+
+                    if not customer:
+                        continue
+
+                    purchases = get_customer_purchases(
+                        customer["customer_id"]
+                    )
+
+                    for purchase in purchases:
+                        purchase = dict(purchase)
+                        total_purchases += 1
+
+                        if purchase.get("purchase_payment_status") != "paid":
+                            continue
+
+                        amount = purchase.get("purchase_total", 0)
+                        total_sales += amount
+
+                        purchase_date = (
+                            purchase.get("purchase_created_at")
+                            or purchase.get("purchase_date")
+                            or purchase.get("purchase_datetime")
+                        )
+
+                        if purchase_date:
+                            try:
+                                key = date.fromisoformat(
+                                    str(purchase_date)[:10]
+                                ).isoformat()
+
+                                daily_sales[key] = (
+                                    daily_sales.get(key, 0) + amount
+                                )
+                            except ValueError:
+                                pass
+
+                        purchase["customer_name"] = (
+                            f"{user['user_fname']} {user['user_lname']}"
+                        )
+                        purchase["customer_email"] = user["user_email"]
+                        recent_purchases.append(purchase)
+
+                recent_purchases.sort(
+                    key=lambda purchase: str(
+                        purchase.get("purchase_created_at")
+                        or purchase.get("purchase_date")
+                        or purchase.get("purchase_datetime")
+                        or ""
+                    ),
+                    reverse=True
+                )
+
+                last_30_days = [
+                    (today - timedelta(days=offset)).isoformat()
+                    for offset in range(29, -1, -1)
+                ]
+
+                sales_chart = [
+                    {"date": day, "total": daily_sales.get(day, 0)}
+                    for day in last_30_days
+                ]
+
+                users_chart = [
+                    {"date": day, "total": daily_users.get(day, 0)}
+                    for day in last_30_days
+                ]
+
+                self.send_json(200, {
+                    "total_users": len(users),
+                    "total_admins": sum(
+                        1 for user in users
+                        if user.get("user_role") == "admin"
+                    ),
+                    "total_customers": sum(
+                        1 for user in users
+                        if user.get("user_role") == "customer"
+                    ),
+                    "total_purchases": total_purchases,
+                    "total_sales_cents": total_sales,
+                    "sales_chart": sales_chart,
+                    "users_chart": users_chart,
+                    "recent_purchases": recent_purchases[:10]
+                })
+
+            except Exception as error:
+                print(f"Admin dashboard analytics error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not load dashboard analytics"}
+                )
+
+            return
+
+        # All users for the admin user dashboard
+        if path == "/users":
+            if not self.require_admin():
+                return
+
+            try:
+                self.send_json(
+                    200,
+                    [dict(user) for user in get_all_users()]
+                )
+            except Exception as error:
+                print(f"User fetch error: {error}")
+                self.send_json(500, {"error": "Could not load users"})
+
+            return
+
+        # All notifications for the admin dashboard
+        if path == "/notifications":
+            if not self.require_admin():
+                return
+
+            try:
+                with get_connection() as conn:
+                    notifications = conn.execute(
+                        """
+                        SELECT *
+                        FROM Notifications
+                        ORDER BY notification_created_at DESC
+                        """
+                    ).fetchall()
+
+                self.send_json(
+                    200,
+                    [dict(notification) for notification in notifications]
+                )
+
+            except Exception as error:
+                print(f"Notification fetch error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not load notifications"}
+                )
+
+            return
+
+        # Public product catalogue
         if path == "/products":
             try:
                 self.send_json(200, get_active_products())
             except Exception as error:
                 print(f"Product fetch error: {error}")
                 self.send_json(500, {"error": "Could not load products"})
+
             return
 
-        # Admin product dashboard (every product, with stock numbers)
+        # Admin product dashboard
         if path == "/admin/products":
             if self.require_admin():
                 self.send_json(200, get_all_products())
@@ -315,16 +500,24 @@ class Server(BaseHTTPRequestHandler):
         # Active loyalty rewards for the signed-in customer.
         if path == "/loyalty/rewards":
             user = self.require_user()
+
             if not user:
                 return
 
             customer = get_customer_by_user_id(user["user_id"])
+
             if customer is None:
-                self.send_json(404, {"error": "Customer account not found"})
+                self.send_json(
+                    404,
+                    {"error": "Customer account not found"}
+                )
                 return
 
             if not customer.get("customer_is_member"):
-                self.send_json(403, {"error": "This account is not enrolled in the loyalty program"})
+                self.send_json(
+                    403,
+                    {"error": "This account is not enrolled in the loyalty program"}
+                )
                 return
 
             try:
@@ -343,28 +536,39 @@ class Server(BaseHTTPRequestHandler):
                     "points": get_customer_points(customer["customer_id"]),
                     "rewards": [dict(reward) for reward in rewards]
                 })
+
             except Exception as error:
                 print(f"Loyalty rewards error: {error}")
-                self.send_json(500, {"error": "Could not load loyalty rewards"})
+                self.send_json(
+                    500,
+                    {"error": "Could not load loyalty rewards"}
+                )
+
             return
 
-        # The logged-in user's own details (used by the nav bar and settings page)
+        # Logged-in user's own details
         if path == "/me":
             user = self.require_user()
+
             if user:
                 self.send_json(200, self.user_details(user))
+
             return
 
-        # Both routes share login, customer lookup and date validation.
+        # Account details and product history
         if path in ("/me/account", "/me/account/product-history"):
             user = self.require_user()
+
             if not user:
                 return
 
             customer = get_customer_by_user_id(user["user_id"])
 
             if customer is None:
-                self.send_json(404, {"error": "Customer account not found"})
+                self.send_json(
+                    404,
+                    {"error": "Customer account not found"}
+                )
                 return
 
             start_date = query_params.get("start_date", [None])[0]
@@ -378,25 +582,37 @@ class Server(BaseHTTPRequestHandler):
                     end_date = date.fromisoformat(end_date).isoformat()
 
             except ValueError:
-                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                self.send_json(
+                    400,
+                    {"error": "Invalid date. Use YYYY-MM-DD."}
+                )
                 return
 
-            if start_date is not None and end_date is not None:
-                if start_date > end_date:
-                    self.send_json(
-                        400,
-                        {"error": "Start date must be on or before end date."}
-                    )
-                    return
+            if (
+                start_date is not None
+                and end_date is not None
+                and start_date > end_date
+            ):
+                self.send_json(
+                    400,
+                    {"error": "Start date must be on or before end date."}
+                )
+                return
 
-            # Product history runs after the customer and dates are known.
             if path == "/me/account/product-history":
                 try:
-                    product_id = int(query_params.get("product_id", [""])[0])
+                    product_id = int(
+                        query_params.get("product_id", [""])[0]
+                    )
+
                     if product_id <= 0:
                         raise ValueError
+
                 except ValueError:
-                    self.send_json(400, {"error": "A valid product_id is required"})
+                    self.send_json(
+                        400,
+                        {"error": "A valid product_id is required"}
+                    )
                     return
 
                 history = get_customer_product_history(
@@ -406,9 +622,13 @@ class Server(BaseHTTPRequestHandler):
                     end_date
                 )
 
-                purchase_count = len({item["purchase_id"] for item in history})
+                purchase_count = len({
+                    item["purchase_id"] for item in history
+                })
+
                 total_quantity = sum(
-                    item["purchase_item_quantity"] for item in history
+                    item["purchase_item_quantity"]
+                    for item in history
                 )
 
                 self.send_json(200, {
@@ -417,20 +637,20 @@ class Server(BaseHTTPRequestHandler):
                     "total_quantity": total_quantity,
                     "history": history
                 })
+
                 return
 
-            # Account history and spending total.
             purchases = get_customer_purchases(
                 customer["customer_id"],
                 start_date,
                 end_date
             )
 
-            total_spent_cents = 0
-
-            for purchase in purchases:
-                if purchase["purchase_payment_status"] == "paid":
-                    total_spent_cents += purchase["purchase_total"]
+            total_spent_cents = sum(
+                purchase["purchase_total"]
+                for purchase in purchases
+                if purchase["purchase_payment_status"] == "paid"
+            )
 
             self.send_json(200, {
                 "customer": customer,
@@ -438,14 +658,20 @@ class Server(BaseHTTPRequestHandler):
                 "purchases": purchases,
                 "total_spent_cents": total_spent_cents
             })
+
             return
 
-        # Every user, for the admin roles page
+        # Admin users
         if path == "/admin/users":
             if self.require_admin():
-                self.send_json(200, [dict(u) for u in get_all_users()])
+                self.send_json(
+                    200,
+                    [dict(user) for user in get_all_users()]
+                )
+
             return
 
+        # Customer account
         if path == "/account":
             user_id = self.get_logged_in_user_id()
 
@@ -456,12 +682,16 @@ class Server(BaseHTTPRequestHandler):
             customer = get_customer_by_user_id(user_id)
 
             if customer is None:
-                self.send_json(404, {"error": "Customer account not found"})
+                self.send_json(
+                    404,
+                    {"error": "Customer account not found"}
+                )
                 return
 
             self.send_json(200, dict(customer))
             return
 
+        # Customer purchases
         if path == "/account/purchases":
             user_id = self.get_logged_in_user_id()
 
@@ -472,14 +702,25 @@ class Server(BaseHTTPRequestHandler):
             customer = get_customer_by_user_id(user_id)
 
             if customer is None:
-                self.send_json(404, {"error": "Customer account not found"})
+                self.send_json(
+                    404,
+                    {"error": "Customer account not found"}
+                )
                 return
 
-            self.send_json(200, get_purchase_records(customer["customer_id"]))
+            self.send_json(
+                200,
+                get_purchase_records(customer["customer_id"])
+            )
+
             return
 
         # Receipt for one of the logged-in customer's purchases
-        if len(parts) == 3 and parts[0] == "account" and parts[1] == "purchases":
+        if (
+            len(parts) == 3
+            and parts[0] == "account"
+            and parts[1] == "purchases"
+        ):
             user_id = self.get_logged_in_user_id()
 
             if user_id is None:
@@ -493,10 +734,16 @@ class Server(BaseHTTPRequestHandler):
             customer = get_customer_by_user_id(user_id)
 
             if customer is None:
-                self.send_json(404, {"error": "Customer account not found"})
+                self.send_json(
+                    404,
+                    {"error": "Customer account not found"}
+                )
                 return
 
-            receipt = get_customer_receipt(customer["customer_id"], int(parts[2]))
+            receipt = get_customer_receipt(
+                customer["customer_id"],
+                int(parts[2])
+            )
 
             if receipt is None:
                 self.send_json(404, {"error": "Receipt not found"})
@@ -505,6 +752,7 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(200, receipt)
             return
 
+        # Fridge dashboard
         if path == "/fridges":
             try:
                 dashboard = []
@@ -512,30 +760,48 @@ class Server(BaseHTTPRequestHandler):
                 for fridge in get_all_fridges():
                     data = dict(fridge)
                     reading = get_latest_reading(data["fridge_id"])
-                    data["latest_reading"] = dict(reading) if reading else None
+                    data["latest_reading"] = (
+                        dict(reading) if reading else None
+                    )
                     dashboard.append(data)
 
                 self.send_json(200, {"fridges": dashboard})
 
             except Exception as error:
                 print(f"Fridge fetch error: {error}")
-                self.send_json(500, {"error": "Could not load fridge data"})
+                self.send_json(
+                    500,
+                    {"error": "Could not load fridge data"}
+                )
 
             return
 
+        # Alerts
         if path == "/alerts":
             try:
                 alerts = get_all_alerts()
-                self.send_json(200, [dict(alert) for alert in alerts])
+                self.send_json(
+                    200,
+                    [dict(alert) for alert in alerts]
+                )
+
             except Exception as error:
                 print(f"Alert fetch error: {error}")
                 self.send_json(500, {"error": "Could not load alerts"})
+
             return
 
         # Latest reading for one refrigerator
-        if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "latest":
+        if (
+            len(parts) == 3
+            and parts[0] == "fridges"
+            and parts[2] == "latest"
+        ):
             if not parts[1].isdigit():
-                self.send_json(400, {"error": "Invalid refrigerator ID"})
+                self.send_json(
+                    400,
+                    {"error": "Invalid refrigerator ID"}
+                )
                 return
 
             reading = get_latest_reading(int(parts[1]))
@@ -548,32 +814,54 @@ class Server(BaseHTTPRequestHandler):
             return
 
         # Notifications for a user
-        if len(parts) == 3 and parts[0] == "users" and parts[2] == "notifications":
+        if (
+            len(parts) == 3
+            and parts[0] == "users"
+            and parts[2] == "notifications"
+        ):
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid user ID"})
                 return
 
             notifications = get_user_notifications(int(parts[1]))
-            self.send_json(200, [dict(n) for n in notifications])
+
+            self.send_json(
+                200,
+                [dict(notification) for notification in notifications]
+            )
+
             return
 
         # Self-checkout cart
-        if len(parts) == 3 and parts[0] == "checkout" and parts[1] == "session":
+        if (
+            len(parts) == 3
+            and parts[0] == "checkout"
+            and parts[1] == "session"
+        ):
             if not parts[2].isdigit():
-                self.send_json(400, {"error": "Invalid checkout session ID"})
+                self.send_json(
+                    400,
+                    {"error": "Invalid checkout session ID"}
+                )
                 return
 
             try:
                 cart = self.checkout.get_cart(int(parts[2]))
 
                 if cart is None:
-                    self.send_json(404, {"error": "Checkout session not found"})
+                    self.send_json(
+                        404,
+                        {"error": "Checkout session not found"}
+                    )
                 else:
                     self.send_json(200, cart)
 
             except Exception as error:
                 print(f"Checkout cart error: {error}")
-                self.send_json(500, {"error": "Could not load checkout cart"})
+                self.send_json(
+                    500,
+                    {"error": "Could not load checkout cart"}
+                )
 
             return
 
@@ -585,13 +873,75 @@ class Server(BaseHTTPRequestHandler):
         path = self.path.split("?")[0].rstrip("/")
         parts = path.strip("/").split("/")
 
-        # Edit a product (admin dashboard)
-        if len(parts) == 3 and parts[0] == "admin" and parts[1] == "products":
+        # Edit a user's account details
+        if len(parts) == 3 and parts[:2] == ["admin", "users"]:
+            self.update_admin_user(parts[2])
+            return
+
+        # Mark a notification as read
+        if (
+            len(parts) == 3
+            and parts[0] == "notifications"
+            and parts[2] == "read"
+        ):
+            if not self.require_admin():
+                return
+
+            if not parts[1].isdigit():
+                self.send_json(
+                    400,
+                    {"error": "Invalid notification ID"}
+                )
+                return
+
+            try:
+                with get_connection() as conn:
+                    result = conn.execute(
+                        """
+                        UPDATE Notifications
+                        SET notification_status = 'READ',
+                            notification_read_at = CURRENT_TIMESTAMP
+                        WHERE notification_id = ?
+                          AND notification_status != 'READ'
+                        """,
+                        (int(parts[1]),)
+                    )
+
+                if result.rowcount:
+                    self.send_json(
+                        200,
+                        {"message": "Notification marked as read"}
+                    )
+                else:
+                    self.send_json(
+                        404,
+                        {"error": "Unread notification not found"}
+                    )
+
+            except Exception as error:
+                print(f"Notification update error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not update notification"}
+                )
+
+            return
+
+        # Edit a product
+        if (
+            len(parts) == 3
+            and parts[0] == "admin"
+            and parts[1] == "products"
+        ):
             self.update_product_route(parts[2])
             return
 
-        # Change another user's role (admin only)
-        if len(parts) == 4 and parts[:2] == ["admin", "users"] and parts[3] == "role":
+        # Change another user's role
+        if (
+            len(parts) == 4
+            and parts[:2] == ["admin", "users"]
+            and parts[3] == "role"
+        ):
             self.update_role_route(parts[2])
             return
 
@@ -604,43 +954,57 @@ class Server(BaseHTTPRequestHandler):
             self.change_password_route()
             return
 
+        # Replace a product's details and barcode
         if len(parts) == 2 and parts[0] == "products":
-
-            # Merge: keep admin protection and reuse the product-update helper.
             if not self.require_admin():
                 return
 
-            self.replace_product(parts[1]) #lucas-test
+            self.replace_product(parts[1])
             return
-            
 
-        if len(parts) == 3 and parts[0] == "fridges" and parts[2] == "threshold":
+        # Update fridge temperature threshold
+        if (
+            len(parts) == 3
+            and parts[0] == "fridges"
+            and parts[2] == "threshold"
+        ):
             self.update_threshold(parts[1])
             return
 
         self.send_json(404, {"error": "Route not found"})
 
-    # Replace a product's details, category and barcode
     def replace_product(self, product_id):
         if not product_id.isdigit():
             self.send_json(400, {"error": "Invalid product ID"})
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
-        for field in ("product_name", "product_category", "product_upc", "product_producer_company"):
+        for field in (
+            "product_name",
+            "product_category",
+            "product_upc",
+            "product_producer_company"
+        ):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
-                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
                 return
 
         price = data.get("product_price")
 
         if type(price) is not int or price < 0:
-            self.send_json(400, {"error": "Price must be a non-negative integer in cents"})
+            self.send_json(
+                400,
+                {"error": "Price must be a non-negative integer in cents"}
+            )
             return
 
         try:
@@ -652,8 +1016,12 @@ class Server(BaseHTTPRequestHandler):
                 data["product_upc"].strip(),
                 data["product_producer_company"].strip()
             )
+
         except sqlite3.IntegrityError:
-            self.send_json(400, {"error": "Invalid product data or UPC already registered"})
+            self.send_json(
+                400,
+                {"error": "Invalid product data or UPC already registered"}
+            )
             return
 
         if updated:
@@ -661,13 +1029,13 @@ class Server(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "Product not found"})
 
-    # Update the minimum temperature for a refrigerator
     def update_threshold(self, fridge_id):
         if not fridge_id.isdigit():
             self.send_json(400, {"error": "Invalid fridge ID"})
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
@@ -680,8 +1048,12 @@ class Server(BaseHTTPRequestHandler):
                 int(fridge_id),
                 {"fridge_min_temperature": data["min_temperature"]}
             )
+
         except sqlite3.IntegrityError:
-            self.send_json(400, {"error": "Temperature violates fridge limits"})
+            self.send_json(
+                400,
+                {"error": "Temperature violates fridge limits"}
+            )
             return
 
         if updated:
@@ -691,17 +1063,23 @@ class Server(BaseHTTPRequestHandler):
 
     def update_settings_route(self):
         user = self.require_user()
+
         if not user:
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
         for field in ("first_name", "last_name"):
             value = data.get(field)
+
             if not isinstance(value, str) or not value.strip():
-                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
                 return
 
         customer = get_customer_by_user_id(user["user_id"])
@@ -709,26 +1087,42 @@ class Server(BaseHTTPRequestHandler):
         if customer:
             for field in ("phone", "address"):
                 value = data.get(field)
+
                 if not isinstance(value, str) or not value.strip():
-                    self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                    self.send_json(
+                        400,
+                        {"error": f"Missing or invalid field: {field}"}
+                    )
                     return
 
-        update_user_name(user["user_id"], data["first_name"], data["last_name"])
+        update_user_name(
+            user["user_id"],
+            data["first_name"],
+            data["last_name"]
+        )
 
         if customer:
-            update_customer(customer["customer_id"], {
-                "customer_address": data["address"].strip(),
-                "customer_phone": data["phone"].strip()
-            })
+            update_customer(
+                customer["customer_id"],
+                {
+                    "customer_address": data["address"].strip(),
+                    "customer_phone": data["phone"].strip()
+                }
+            )
 
-        self.send_json(200, self.user_details(get_user(user["user_id"])))
+        self.send_json(
+            200,
+            self.user_details(get_user(user["user_id"]))
+        )
 
     def change_password_route(self):
         user = self.require_user()
+
         if not user:
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
@@ -736,21 +1130,31 @@ class Server(BaseHTTPRequestHandler):
         new = data.get("new_password")
 
         if not isinstance(current, str) or not isinstance(new, str):
-            self.send_json(400, {"error": "Current and new password are required"})
+            self.send_json(
+                400,
+                {"error": "Current and new password are required"}
+            )
             return
 
         if len(new) < 8:
-            self.send_json(400, {"error": "New password must be at least 8 characters"})
+            self.send_json(
+                400,
+                {"error": "New password must be at least 8 characters"}
+            )
             return
 
         if not change_password(user["user_id"], current, new):
-            self.send_json(400, {"error": "Current password is incorrect"})
+            self.send_json(
+                400,
+                {"error": "Current password is incorrect"}
+            )
             return
 
         self.send_json(200, {"message": "Password changed"})
 
     def update_role_route(self, user_id):
         admin = self.require_admin()
+
         if not admin:
             return
 
@@ -759,16 +1163,24 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if int(user_id) == admin["user_id"]:
-            self.send_json(400, {"error": "You can't change your own role"})
+            self.send_json(
+                400,
+                {"error": "You can't change your own role"}
+            )
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
         role = data.get("role")
+
         if role not in ROLES:
-            self.send_json(400, {"error": f"Role must be one of: {', '.join(ROLES)}"})
+            self.send_json(
+                400,
+                {"error": f"Role must be one of: {', '.join(ROLES)}"}
+            )
             return
 
         if not update_user_role(int(user_id), role):
@@ -786,18 +1198,24 @@ class Server(BaseHTTPRequestHandler):
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
         product, error = self.validate_product(data, partial=True)
+
         if error:
             self.send_json(400, {"error": error})
             return
 
         try:
             updated = update_product(int(product_id), **product)
+
         except sqlite3.IntegrityError:
-            self.send_json(409, {"error": "A product with this UPC already exists"})
+            self.send_json(
+                409,
+                {"error": "A product with this UPC already exists"}
+            )
             return
 
         if updated:
@@ -805,11 +1223,276 @@ class Server(BaseHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "Product not found"})
 
+    # Update a user's account details from the admin dashboard
+    def update_admin_user(self, user_id):
+        if not self.require_admin():
+            return
+
+        if not user_id.isdigit():
+            self.send_json(400, {"error": "Invalid user ID"})
+            return
+
+        user = get_user(int(user_id))
+
+        if not user:
+            self.send_json(404, {"error": "User not found"})
+            return
+
+        data = self.read_json_or_400()
+
+        if data is None:
+            return
+
+        allowed_fields = {
+            "first_name",
+            "last_name",
+            "email",
+            "phone",
+            "address"
+        }
+
+        if not data or any(
+            field not in allowed_fields for field in data
+        ):
+            self.send_json(400, {"error": "Invalid user fields"})
+            return
+
+        for field in ("first_name", "last_name", "email"):
+            if field in data:
+                value = data[field]
+
+                if not isinstance(value, str) or not value.strip():
+                    self.send_json(
+                        400,
+                        {"error": f"Invalid field: {field}"}
+                    )
+                    return
+
+        customer = get_customer_by_user_id(int(user_id))
+
+        if customer:
+            for field in ("phone", "address"):
+                if field in data:
+                    value = data[field]
+
+                    if not isinstance(value, str) or not value.strip():
+                        self.send_json(
+                            400,
+                            {"error": f"Invalid field: {field}"}
+                        )
+                        return
+
+        try:
+            first_name = data.get("first_name", user["user_fname"])
+            last_name = data.get("last_name", user["user_lname"])
+
+            if "first_name" in data or "last_name" in data:
+                update_user_name(
+                    int(user_id),
+                    first_name.strip(),
+                    last_name.strip()
+                )
+
+            if "email" in data:
+                with get_connection() as conn:
+                    conn.execute(
+                        """
+                        UPDATE Users
+                        SET user_email = ?
+                        WHERE user_id = ?
+                        """,
+                        (data["email"].strip(), int(user_id))
+                    )
+
+            if customer and (
+                "phone" in data or "address" in data
+            ):
+                with get_connection() as conn:
+                    conn.execute(
+                        """
+                        UPDATE Customers
+                        SET customer_phone = ?,
+                            customer_address = ?
+                        WHERE customer_id = ?
+                        """,
+                        (
+                            data.get(
+                                "phone",
+                                customer["customer_phone"]
+                            ),
+                            data.get(
+                                "address",
+                                customer["customer_address"]
+                            ),
+                            customer["customer_id"]
+                        )
+                    )
+
+            updated_user = get_user(int(user_id))
+
+            self.send_json(
+                200,
+                self.user_details(updated_user)
+            )
+
+        except sqlite3.IntegrityError:
+            self.send_json(
+                409,
+                {"error": "That email address is already in use"}
+            )
+
+        except Exception as error:
+            print(f"Admin user update error: {error}")
+            self.send_json(
+                500,
+                {"error": "Could not update user"}
+            )
+
     # ---------- POST ----------
 
     def do_POST(self):
         path = self.path.split("?")[0].rstrip("/")
         parts = path.strip("/").split("/")
+
+        # Create a customer account from the admin dashboard
+        if path == "/admin/users":
+            if not self.require_admin():
+                return
+
+            data = self.read_json_or_400()
+
+            if data is None:
+                return
+
+            required_fields = (
+                "first_name",
+                "last_name",
+                "email",
+                "password",
+                "address",
+                "phone"
+            )
+
+            for field in required_fields:
+                value = data.get(field)
+
+                if not isinstance(value, str) or not value.strip():
+                    self.send_json(
+                        400,
+                        {"error": f"Missing or invalid field: {field}"}
+                    )
+                    return
+
+            if len(data["password"]) < 8:
+                self.send_json(
+                    400,
+                    {"error": "Password must be at least 8 characters"}
+                )
+                return
+
+            try:
+                customer_id = add_customer(
+                    data["first_name"].strip(),
+                    data["last_name"].strip(),
+                    data["address"].strip(),
+                    data["phone"].strip(),
+                    data["email"].strip(),
+                    data["password"],
+                    is_member=True
+                )
+
+                customer = get_customer(customer_id)
+
+                if not customer:
+                    self.send_json(
+                        500,
+                        {
+                            "error": "Customer was created but could not be retrieved"
+                        }
+                    )
+                    return
+
+                user = get_user(customer["user_id"])
+
+                if not user:
+                    self.send_json(
+                        500,
+                        {
+                            "error": "Customer was created but its user account could not be retrieved"
+                        }
+                    )
+                    return
+
+                self.send_json(
+                    201,
+                    self.user_details(user)
+                )
+
+            except sqlite3.IntegrityError:
+                self.send_json(
+                    409,
+                    {
+                        "error": "This email or customer code is already registered"
+                    }
+                )
+
+            except Exception as error:
+                print(f"Admin user creation error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not create user"}
+                )
+
+            return
+
+        # Acknowledge an alert
+        if (
+            len(parts) == 3
+            and parts[0] == "alerts"
+            and parts[2] == "acknowledge"
+        ):
+            admin = self.require_admin()
+
+            if not admin:
+                return
+
+            if not parts[1].isdigit():
+                self.send_json(400, {"error": "Invalid alert ID"})
+                return
+
+            try:
+                with get_connection() as conn:
+                    result = conn.execute(
+                        """
+                        UPDATE Alerts
+                        SET alert_status = 'ACKNOWLEDGED',
+                            alert_acknowledged_at = CURRENT_TIMESTAMP,
+                            alert_acknowledged_by = ?
+                        WHERE alert_id = ?
+                          AND alert_status = 'UNACKNOWLEDGED'
+                        """,
+                        (admin["user_id"], int(parts[1]))
+                    )
+
+                if result.rowcount:
+                    self.send_json(
+                        200,
+                        {"message": "Alert acknowledged"}
+                    )
+                else:
+                    self.send_json(
+                        404,
+                        {"error": "Unacknowledged alert not found"}
+                    )
+
+            except Exception as error:
+                print(f"Alert acknowledgement error: {error}")
+                self.send_json(
+                    500,
+                    {"error": "Could not acknowledge alert"}
+                )
+
+            return
 
         if path == "/register":
             self.register_customer()
@@ -819,8 +1502,15 @@ class Server(BaseHTTPRequestHandler):
             self.login_user()
             return
 
-        if len(parts) == 4 and parts[0] == "checkout" and parts[1] == "session" and parts[3] == "login":
-            self.login_checkout_customer(int(parts[2]) if parts[2].isdigit() else None)
+        if (
+            len(parts) == 4
+            and parts[0] == "checkout"
+            and parts[1] == "session"
+            and parts[3] == "login"
+        ):
+            self.login_checkout_customer(
+                int(parts[2]) if parts[2].isdigit() else None
+            )
             return
 
         if path == "/loyalty/redeem":
@@ -839,7 +1529,7 @@ class Server(BaseHTTPRequestHandler):
             self.receive_stock()
             return
 
-        # Add a product (admin dashboard)
+        # Add a product from the admin dashboard
         if parts == ["admin", "products"]:
             self.add_product_route()
             return
@@ -876,41 +1566,65 @@ class Server(BaseHTTPRequestHandler):
             self.create_checkout_session()
             return
 
-        if len(parts) == 4 and parts[0] == "checkout" and parts[1] == "session" and parts[3] == "items":
+        if (
+            len(parts) == 4
+            and parts[0] == "checkout"
+            and parts[1] == "session"
+            and parts[3] == "items"
+        ):
             self.add_cart_item(parts[2])
             return
 
+        # Complete checkout and email the receipt to registered customers
         if path == "/checkout":
-    # Merge: preserve token-based checkout and automatic receipt emailing.
             try:
                 data = self.read_json()
 
                 session_id = data.get("session_id")
-                # Identify the customer from their login token. Without a token, complete the purchase as a guest.
                 customer_id = None
+                customer = None
 
                 if self.headers.get("Authorization"):
                     user_id = self.get_logged_in_user_id()
 
                     if user_id is None:
-                        self.send_json(401, {"error": "Please log in again"})
+                        self.send_json(
+                            401,
+                            {"error": "Please log in again"}
+                        )
                         return
 
                     customer = get_customer_by_user_id(user_id)
 
                     if customer is None:
-                        self.send_json(404, {"error": "Customer account not found"})
+                        self.send_json(
+                            404,
+                            {"error": "Customer account not found"}
+                        )
                         return
 
                     customer_id = customer["customer_id"]
+
                 payment_method = data.get("payment_method", "card")
 
                 if type(session_id) is not int or session_id <= 0:
-                    self.send_json(400, {"error": "A valid session_id is required"})
+                    self.send_json(
+                        400,
+                        {"error": "A valid session_id is required"}
+                    )
                     return
 
-                if customer_id is not None and (type(customer_id) is not int or customer_id <= 0):
-                    self.send_json(400, {"error": "Invalid customer ID"})
+                if (
+                    customer_id is not None
+                    and (
+                        type(customer_id) is not int
+                        or customer_id <= 0
+                    )
+                ):
+                    self.send_json(
+                        400,
+                        {"error": "Invalid customer ID"}
+                    )
                     return
 
                 receipt = self.checkout.complete_purchase(
@@ -919,20 +1633,24 @@ class Server(BaseHTTPRequestHandler):
                     payment_method=payment_method
                 )
 
-                #After purchase it sends an email using customer token
                 if not receipt:
-                    self.send_json(400, {"error": "Could not complete this purchase"})
+                    self.send_json(
+                        400,
+                        {"error": "Could not complete this purchase"}
+                    )
+
                 else:
                     receipt["email_status"] = "not_applicable"
 
-                    # Email registered customers after the purchase is saved.
                     if customer_id is not None:
                         try:
                             send_receipt_email(
                                 customer["user_email"],
                                 receipt
                             )
+
                             receipt["email_status"] = "sent"
+
                         except Exception as error:
                             print(f"Receipt email error: {error}")
                             receipt["email_status"] = "failed"
@@ -940,21 +1658,34 @@ class Server(BaseHTTPRequestHandler):
                     self.send_json(201, receipt)
 
             except (ValueError, json.JSONDecodeError) as error:
-                self.send_json(400, {"error": str(error) or "Invalid checkout request"})
+                self.send_json(
+                    400,
+                    {"error": str(error) or "Invalid checkout request"}
+                )
+
             except sqlite3.IntegrityError as error:
                 print(f"Checkout database error: {error}")
-                self.send_json(409, {"error": "Could not complete this purchase"})
+                self.send_json(
+                    409,
+                    {"error": "Could not complete this purchase"}
+                )
+
             except Exception as error:
                 print(f"Checkout error: {error}")
-                self.send_json(500, {"error": "Could not complete checkout"})
+                self.send_json(
+                    500,
+                    {"error": "Could not complete checkout"}
+                )
 
             return
 
         self.send_json(404, {"error": "Route not found"})
 
-    # Checks email and password, then hands back a login token
+    # ---------- Login ----------
+
     def login_user(self):
         data = self.read_json_or_400()
+
         if data is None:
             return
 
@@ -962,18 +1693,28 @@ class Server(BaseHTTPRequestHandler):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
-                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
                 return
 
         try:
-            user = authenticate_user(data["email"], data["password"])
+            user = authenticate_user(
+                data["email"],
+                data["password"]
+            )
+
         except sqlite3.Error as error:
             print(f"Login database error: {error}")
             self.send_json(500, {"error": "Could not log in"})
             return
 
         if not user:
-            self.send_json(401, {"error": "Invalid email or password"})
+            self.send_json(
+                401,
+                {"error": "Invalid email or password"}
+            )
             return
 
         token = secrets.token_urlsafe(32)
@@ -987,29 +1728,49 @@ class Server(BaseHTTPRequestHandler):
 
     def login_checkout_customer(self, session_id):
         if session_id is None:
-            self.send_json(400, {"error": "Invalid checkout session ID"})
+            self.send_json(
+                400,
+                {"error": "Invalid checkout session ID"}
+            )
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
         email = data.get("email")
         password = data.get("password")
 
-        if not isinstance(email, str) or not email.strip() or not isinstance(password, str) or not password:
-            self.send_json(400, {"error": "Email and password are required"})
+        if (
+            not isinstance(email, str)
+            or not email.strip()
+            or not isinstance(password, str)
+            or not password
+        ):
+            self.send_json(
+                400,
+                {"error": "Email and password are required"}
+            )
             return
 
         try:
             user = authenticate_user(email.strip(), password)
+
             if not user:
-                self.send_json(401, {"error": "Incorrect email or password"})
+                self.send_json(
+                    401,
+                    {"error": "Incorrect email or password"}
+                )
                 return
 
             customer = get_customer_by_user_id(user["user_id"])
+
             if customer is None:
-                self.send_json(404, {"error": "Customer account not found"})
+                self.send_json(
+                    404,
+                    {"error": "Customer account not found"}
+                )
                 return
 
             with get_connection() as conn:
@@ -1022,8 +1783,14 @@ class Server(BaseHTTPRequestHandler):
                     (session_id,)
                 ).fetchone()
 
-                if session is None or session["session_status"] != "ACTIVE":
-                    self.send_json(404, {"error": "Active checkout session not found"})
+                if (
+                    session is None
+                    or session["session_status"] != "ACTIVE"
+                ):
+                    self.send_json(
+                        404,
+                        {"error": "Active checkout session not found"}
+                    )
                     return
 
                 conn.execute(
@@ -1046,12 +1813,17 @@ class Server(BaseHTTPRequestHandler):
 
                 account = {
                     "customer_id": customer["customer_id"],
-                    "is_member": bool(customer.get("customer_is_member", 0)),
+                    "is_member": bool(
+                        customer.get("customer_is_member", 0)
+                    ),
                     "user_id": user["user_id"],
                     "first_name": user["user_fname"],
                     "last_name": user["user_lname"],
                     "email": user["user_email"],
-                    "loyalty_points": membership["customer_membership_points"] if membership else 0
+                    "loyalty_points": (
+                        membership["customer_membership_points"]
+                        if membership else 0
+                    )
                 }
 
             self.send_json(200, {
@@ -1061,16 +1833,26 @@ class Server(BaseHTTPRequestHandler):
 
         except sqlite3.Error as error:
             print(f"Checkout login database error: {error}")
-            self.send_json(500, {"error": "Could not sign in"})
+            self.send_json(
+                500,
+                {"error": "Could not sign in"}
+            )
+
         except Exception as error:
             print(f"Checkout login error: {error}")
-            self.send_json(500, {"error": "Could not sign in"})
+            self.send_json(
+                500,
+                {"error": "Could not sign in"}
+            )
 
     def register_customer(self):
         try:
             data = self.read_json()
         except (ValueError, json.JSONDecodeError) as error:
-            self.send_json(400, {"error": str(error) or "Invalid JSON"})
+            self.send_json(
+                400,
+                {"error": str(error) or "Invalid JSON"}
+            )
             return
 
         required_fields = [
@@ -1087,17 +1869,26 @@ class Server(BaseHTTPRequestHandler):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
-                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
                 return
 
         if data["password"] != data["confirm_password"]:
             hardware_feedback(False)
-            self.send_json(400, {"error": "Passwords do not match"})
+            self.send_json(
+                400,
+                {"error": "Passwords do not match"}
+            )
             return
 
         if len(data["password"]) < 8:
             hardware_feedback(False)
-            self.send_json(400, {"error": "Password must be at least 8 characters"})
+            self.send_json(
+                400,
+                {"error": "Password must be at least 8 characters"}
+            )
             return
 
         try:
@@ -1110,9 +1901,18 @@ class Server(BaseHTTPRequestHandler):
                 data["password"],
                 is_member=True
             )
+
             customer = get_customer(customer_id)
 
+            if not customer:
+                self.send_json(
+                    500,
+                    {"error": "Customer was created but could not be retrieved"}
+                )
+                return
+
             hardware_feedback(True)
+
             self.send_json(201, {
                 "message": "Customer added",
                 "customer_id": customer_id,
@@ -1122,28 +1922,48 @@ class Server(BaseHTTPRequestHandler):
         except sqlite3.IntegrityError as error:
             hardware_feedback(False)
             print(f"Registration database error: {error}")
-            self.send_json(409, {"error": "This email or customer code is already registered"})
+            self.send_json(
+                409,
+                {
+                    "error": "This email or customer code is already registered"
+                }
+            )
 
         except Exception as error:
             hardware_feedback(False)
             print(f"Registration error: {error}")
-            self.send_json(500, {"error": "Could not add customer"})
+            self.send_json(
+                500,
+                {"error": "Could not add customer"}
+            )
+
+    # ---------- Employee authorization ----------
 
     def authorize_employee_adjustment(self):
         data = self.read_json_or_400()
+
         if data is None:
             return
 
-        employee = self.get_employee_by_id(data.get("employee_id"))
+        employee = self.get_employee_by_id(
+            data.get("employee_id")
+        )
+
         if employee is None:
-            self.send_json(403, {"error": "Employee ID not recognized or not authorized"})
+            self.send_json(
+                403,
+                {"error": "Employee ID not recognized or not authorized"}
+            )
             return
 
         self.send_json(200, {
             "authorized": True,
             "employee": {
                 "user_id": employee["user_id"],
-                "name": f"{employee['user_fname']} {employee['user_lname']}"
+                "name": (
+                    f"{employee['user_fname']} "
+                    f"{employee['user_lname']}"
+                )
             }
         })
 
@@ -1173,30 +1993,49 @@ class Server(BaseHTTPRequestHandler):
 
         return dict(employee) if employee else None
 
+    # ---------- Loyalty ----------
+
     def redeem_loyalty_reward(self):
         user = self.require_user()
+
         if not user:
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
         reward_id = data.get("reward_id")
-        if isinstance(reward_id, bool) or not str(reward_id).isdigit():
-            self.send_json(400, {"error": "A valid reward ID is required"})
+
+        if (
+            isinstance(reward_id, bool)
+            or not str(reward_id).isdigit()
+        ):
+            self.send_json(
+                400,
+                {"error": "A valid reward ID is required"}
+            )
             return
 
         customer = get_customer_by_user_id(user["user_id"])
+
         if customer is None:
-            self.send_json(404, {"error": "Customer account not found"})
+            self.send_json(
+                404,
+                {"error": "Customer account not found"}
+            )
             return
 
         if not customer.get("customer_is_member"):
-            self.send_json(403, {"error": "This account is not enrolled in the loyalty program"})
+            self.send_json(
+                403,
+                {"error": "This account is not enrolled in the loyalty program"}
+            )
             return
 
         conn = get_connection()
+
         try:
             conn.execute("BEGIN IMMEDIATE")
 
@@ -1212,7 +2051,10 @@ class Server(BaseHTTPRequestHandler):
 
             if reward is None:
                 conn.rollback()
-                self.send_json(404, {"error": "Reward is no longer available"})
+                self.send_json(
+                    404,
+                    {"error": "Reward is no longer available"}
+                )
                 return
 
             membership = conn.execute(
@@ -1226,20 +2068,28 @@ class Server(BaseHTTPRequestHandler):
 
             if membership is None:
                 conn.rollback()
-                self.send_json(409, {"error": "Loyalty membership could not be found"})
+                self.send_json(
+                    409,
+                    {"error": "Loyalty membership could not be found"}
+                )
                 return
 
             points_cost = reward["reward_points_cost"]
             current_points = membership["customer_membership_points"]
+
             if current_points < points_cost:
                 conn.rollback()
-                self.send_json(400, {"error": "You do not have enough points for this reward"})
+                self.send_json(
+                    400,
+                    {"error": "You do not have enough points for this reward"}
+                )
                 return
 
             conn.execute(
                 """
                 UPDATE CustomerMemberships
-                SET customer_membership_points = customer_membership_points - ?,
+                SET customer_membership_points =
+                        customer_membership_points - ?,
                     customer_membership_updated_at = CURRENT_TIMESTAMP
                 WHERE customer_id = ?
                 """,
@@ -1285,6 +2135,7 @@ class Server(BaseHTTPRequestHandler):
             ).fetchone()["customer_membership_points"]
 
             conn.commit()
+
             self.send_json(201, {
                 "message": "Reward redeemed successfully",
                 "redemption_id": redemption_id,
@@ -1296,15 +2147,22 @@ class Server(BaseHTTPRequestHandler):
         except Exception as error:
             conn.rollback()
             print(f"Loyalty redemption error: {error}")
-            self.send_json(500, {"error": "Could not redeem this reward"})
+            self.send_json(
+                500,
+                {"error": "Could not redeem this reward"}
+            )
+
         finally:
             conn.close()
+
+    # ---------- Products and stock ----------
 
     def add_product_route(self):
         if not self.require_admin():
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
@@ -1333,7 +2191,10 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(409, {"error": str(error)})
             return
         except sqlite3.IntegrityError:
-            self.send_json(409, {"error": "A product with this UPC already exists"})
+            self.send_json(
+                409,
+                {"error": "A product with this UPC already exists"}
+            )
             return
 
         if epcs:
@@ -1375,6 +2236,7 @@ class Server(BaseHTTPRequestHandler):
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
@@ -1512,25 +2374,36 @@ class Server(BaseHTTPRequestHandler):
 
     # Create a product with its category and barcode
     def create_product(self):
-        # Merge: preserve administrator protection.
         if not self.require_admin():
             return
 
         data = self.read_json_or_400()
+
         if data is None:
             return
 
-        for field in ("product_name", "product_category", "product_upc", "product_producer_company"):
+        for field in (
+            "product_name",
+            "product_category",
+            "product_upc",
+            "product_producer_company"
+        ):
             value = data.get(field)
 
             if not isinstance(value, str) or not value.strip():
-                self.send_json(400, {"error": f"Missing or invalid field: {field}"})
+                self.send_json(
+                    400,
+                    {"error": f"Missing or invalid field: {field}"}
+                )
                 return
 
         price = data.get("product_price")
 
         if type(price) is not int or price < 0:
-            self.send_json(400, {"error": "Price must be a non-negative integer in cents"})
+            self.send_json(
+                400,
+                {"error": "Price must be a non-negative integer in cents"}
+            )
             return
 
         try:
@@ -1542,22 +2415,31 @@ class Server(BaseHTTPRequestHandler):
                 data["product_producer_company"].strip()
             )
 
-            self.send_json(201, {"message": "Product added", "product_id": product_id})
+            self.send_json(201, {
+                "message": "Product added",
+                "product_id": product_id
+            })
 
         except sqlite3.IntegrityError as error:
             print(f"Product database error: {error}")
-            self.send_json(400, {"error": "Invalid product data or UPC already registered"})
+            self.send_json(
+                400,
+                {"error": "Invalid product data or UPC already registered"}
+            )
 
         except Exception as error:
             print(f"Product creation error: {error}")
-            self.send_json(500, {"error": "Could not add product"})
+            self.send_json(
+                500,
+                {"error": "Could not add product"}
+            )
 
-    # Record a delivery and increase the product's stock
     def receive_stock(self):
-        # Merge: preserve administrator protection.
         if not self.require_admin():
             return
+
         data = self.read_json_or_400()
+
         if data is None:
             return
 
@@ -1570,24 +2452,45 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if type(quantity) is not int or quantity <= 0:
-            self.send_json(400, {"error": "Quantity must be a positive integer"})
+            self.send_json(
+                400,
+                {"error": "Quantity must be a positive integer"}
+            )
             return
 
         if supplier is not None and not isinstance(supplier, str):
-            self.send_json(400, {"error": "Supplier must be text"})
+            self.send_json(
+                400,
+                {"error": "Supplier must be text"}
+            )
             return
 
         try:
             reception_id = add_stock_receipt(
                 supplier=supplier,
-                items=[{"product_id": product_id, "quantity": quantity}]
+                items=[
+                    {
+                        "product_id": product_id,
+                        "quantity": quantity
+                    }
+                ]
             )
 
-            self.send_json(201, {"message": "Stock received", "reception_id": reception_id})
+            self.send_json(201, {
+                "message": "Stock received",
+                "reception_id": reception_id
+            })
 
         except (sqlite3.IntegrityError, ValueError) as error:
             print(f"Stock reception error: {error}")
-            self.send_json(400, {"error": "Product does not exist or stock data is invalid"})
+            self.send_json(
+                400,
+                {
+                    "error": "Product does not exist or stock data is invalid"
+                }
+            )
+
+    # ---------- Self-checkout ----------
 
     def create_checkout_session(self):
         if self.scanner.is_active():
@@ -1598,26 +2501,46 @@ class Server(BaseHTTPRequestHandler):
             data = self.read_json()
             user_id = data.get("user_id")
 
-            if user_id is not None and (type(user_id) is not int or user_id <= 0):
+            if (
+                user_id is not None
+                and (
+                    type(user_id) is not int
+                    or user_id <= 0
+                )
+            ):
                 self.send_json(400, {"error": "Invalid user ID"})
                 return
 
             session_id = self.checkout.create_session(user_id)
 
-            self.send_json(201, {"session_id": session_id, "session_status": "ACTIVE"})
+            self.send_json(201, {
+                "session_id": session_id,
+                "session_status": "ACTIVE"
+            })
 
         except (ValueError, json.JSONDecodeError) as error:
-            self.send_json(400, {"error": str(error) or "Invalid session request"})
+            self.send_json(
+                400,
+                {"error": str(error) or "Invalid session request"}
+            )
+
         except sqlite3.IntegrityError as error:
             print(f"Checkout session database error: {error}")
             self.send_json(400, {"error": str(error)})
+
         except Exception as error:
             print(f"Checkout session error: {error}")
-            self.send_json(500, {"error": "Could not create checkout session"})
+            self.send_json(
+                500,
+                {"error": "Could not create checkout session"}
+            )
 
     def add_cart_item(self, session_id):
         if not session_id.isdigit():
-            self.send_json(400, {"error": "Invalid checkout session ID"})
+            self.send_json(
+                400,
+                {"error": "Invalid checkout session ID"}
+            )
             return
 
         try:
@@ -1633,21 +2556,33 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "Invalid quantity"})
                 return
 
-            cart = self.checkout.add_to_session(int(session_id), product_id, quantity)
+            cart = self.checkout.add_to_session(
+                int(session_id),
+                product_id,
+                quantity
+            )
 
             if cart is False or cart is None:
-                self.send_json(400, {"error": "Could not add product to cart"})
+                self.send_json(
+                    400,
+                    {"error": "Could not add product to cart"}
+                )
             else:
                 self.send_json(200, cart)
 
         except (ValueError, json.JSONDecodeError) as error:
-            self.send_json(400, {"error": str(error) or "Invalid request"})
+            self.send_json(
+                400,
+                {"error": str(error) or "Invalid request"}
+            )
+
         except Exception as error:
             print(f"Add cart item error: {error}")
-            self.send_json(500, {"error": "Could not add product to cart"})
+            self.send_json(
+                500,
+                {"error": "Could not add product to cart"}
+            )
 
-    # Complete the purchase using the items in the cart.
-    # Without a login token the purchase is done as a guest.
     def complete_checkout(self):
         try:
             data = self.read_json()
@@ -1658,13 +2593,19 @@ class Server(BaseHTTPRequestHandler):
                 user_id = self.get_logged_in_user_id()
 
                 if user_id is None:
-                    self.send_json(401, {"error": "Please log in again"})
+                    self.send_json(
+                        401,
+                        {"error": "Please log in again"}
+                    )
                     return
 
                 customer = get_customer_by_user_id(user_id)
 
                 if customer is None:
-                    self.send_json(404, {"error": "Customer account not found"})
+                    self.send_json(
+                        404,
+                        {"error": "Customer account not found"}
+                    )
                     return
 
                 customer_id = customer["customer_id"]
@@ -1672,7 +2613,10 @@ class Server(BaseHTTPRequestHandler):
             payment_method = data.get("payment_method", "card")
 
             if type(session_id) is not int or session_id <= 0:
-                self.send_json(400, {"error": "A valid session_id is required"})
+                self.send_json(
+                    400,
+                    {"error": "A valid session_id is required"}
+                )
                 return
 
             receipt = self.checkout.complete_purchase(
@@ -1682,18 +2626,32 @@ class Server(BaseHTTPRequestHandler):
             )
 
             if not receipt:
-                self.send_json(400, {"error": "Could not complete this purchase"})
+                self.send_json(
+                    400,
+                    {"error": "Could not complete this purchase"}
+                )
             else:
                 self.send_json(201, receipt)
 
         except (ValueError, json.JSONDecodeError) as error:
-            self.send_json(400, {"error": str(error) or "Invalid checkout request"})
+            self.send_json(
+                400,
+                {"error": str(error) or "Invalid checkout request"}
+            )
+
         except sqlite3.IntegrityError as error:
             print(f"Checkout database error: {error}")
-            self.send_json(409, {"error": "Could not complete this purchase"})
+            self.send_json(
+                409,
+                {"error": "Could not complete this purchase"}
+            )
+
         except Exception as error:
             print(f"Checkout error: {error}")
-            self.send_json(500, {"error": "Could not complete checkout"})
+            self.send_json(
+                500,
+                {"error": "Could not complete checkout"}
+            )
 
     # ---------- PATCH ----------
 
@@ -1710,7 +2668,10 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if not parts[2].isdigit() or not parts[4].isdigit():
-            self.send_json(400, {"error": "Invalid session or product ID"})
+            self.send_json(
+                400,
+                {"error": "Invalid session or product ID"}
+            )
             return
 
         try:
@@ -1722,36 +2683,69 @@ class Server(BaseHTTPRequestHandler):
                 return
 
             current_cart = self.checkout.get_cart(int(parts[2]))
+
             if current_cart is None:
-                self.send_json(404, {"error": "Checkout session not found"})
+                self.send_json(
+                    404,
+                    {"error": "Checkout session not found"}
+                )
                 return
 
             current_item = next(
-                (item for item in current_cart["items"] if item["product_id"] == int(parts[4])),
+                (
+                    item for item in current_cart["items"]
+                    if item["product_id"] == int(parts[4])
+                ),
                 None
             )
+
             if current_item is None:
-                self.send_json(404, {"error": "Cart item not found"})
+                self.send_json(
+                    404,
+                    {"error": "Cart item not found"}
+                )
                 return
 
             if quantity < current_item["session_item_quantity"]:
-                employee = self.get_employee_by_id(data.get("employee_id"))
+                employee = self.get_employee_by_id(
+                    data.get("employee_id")
+                )
+
                 if employee is None:
-                    self.send_json(403, {"error": "Employee authorization is required to reduce item quantities"})
+                    self.send_json(
+                        403,
+                        {
+                            "error": "Employee authorization is required to reduce item quantities"
+                        }
+                    )
                     return
 
-            cart = self.checkout.set_quantity(int(parts[2]), int(parts[4]), quantity)
+            cart = self.checkout.set_quantity(
+                int(parts[2]),
+                int(parts[4]),
+                quantity
+            )
 
             if cart is False or cart is None:
-                self.send_json(400, {"error": "Could not update cart item"})
+                self.send_json(
+                    400,
+                    {"error": "Could not update cart item"}
+                )
             else:
                 self.send_json(200, cart)
 
         except (ValueError, json.JSONDecodeError) as error:
-            self.send_json(400, {"error": str(error) or "Invalid request"})
+            self.send_json(
+                400,
+                {"error": str(error) or "Invalid request"}
+            )
+
         except Exception as error:
             print(f"Update cart item error: {error}")
-            self.send_json(500, {"error": "Could not update cart item"})
+            self.send_json(
+                500,
+                {"error": "Could not update cart item"}
+            )
 
     # ---------- DELETE ----------
 
@@ -1767,17 +2761,26 @@ class Server(BaseHTTPRequestHandler):
 
         # Hide the product without deleting its database record.
         if len(parts) == 2 and parts[0] == "products":
-            # Merge: preserve administrator protection.
             if not self.require_admin():
                 return
+
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid product ID"})
                 return
 
-            if update_product_record(int(parts[1]), {"product_is_active": 0}):
-                self.send_json(200, {"message": "Product removed"})
+            if update_product_record(
+                int(parts[1]),
+                {"product_is_active": 0}
+            ):
+                self.send_json(
+                    200,
+                    {"message": "Product removed"}
+                )
             else:
-                self.send_json(404, {"error": "Product not found"})
+                self.send_json(
+                    404,
+                    {"error": "Product not found"}
+                )
 
             return
 
@@ -1791,29 +2794,50 @@ class Server(BaseHTTPRequestHandler):
             return
 
         if not parts[2].isdigit() or not parts[4].isdigit():
-            self.send_json(400, {"error": "Invalid session or product ID"})
+            self.send_json(
+                400,
+                {"error": "Invalid session or product ID"}
+            )
             return
 
         try:
             data = self.read_json_or_400()
+
             if data is None:
                 return
 
-            employee = self.get_employee_by_id(data.get("employee_id"))
+            employee = self.get_employee_by_id(
+                data.get("employee_id")
+            )
+
             if employee is None:
-                self.send_json(403, {"error": "Employee authorization is required to remove cart items"})
+                self.send_json(
+                    403,
+                    {
+                        "error": "Employee authorization is required to remove cart items"
+                    }
+                )
                 return
 
-            cart = self.checkout.remove_from_session(int(parts[2]), int(parts[4]))
+            cart = self.checkout.remove_from_session(
+                int(parts[2]),
+                int(parts[4])
+            )
 
             if cart is False or cart is None:
-                self.send_json(400, {"error": "Could not remove cart item"})
+                self.send_json(
+                    400,
+                    {"error": "Could not remove cart item"}
+                )
             else:
                 self.send_json(200, cart)
 
         except Exception as error:
             print(f"Remove cart item error: {error}")
-            self.send_json(500, {"error": "Could not remove cart item"})
+            self.send_json(
+                500,
+                {"error": "Could not remove cart item"}
+            )
 
 
 def run_server():
@@ -1849,6 +2873,7 @@ def run_server():
         reader = RFIDReader()
         reader.start(route_tag)
         print("[INFO] RFID reader initialized.")
+
     except Exception as error:
         print(f"[WARNING] RFID reader unavailable: {error}")
         print("[INFO] Continuing without RFID hardware.")
@@ -1856,6 +2881,7 @@ def run_server():
     if mqttProj is not None:
         try:
             mqttProj.start(db_path=DB_FILE)
+
         except Exception as error:
             print(f"[WARNING] MQTT unavailable: {error}")
 
@@ -1874,6 +2900,7 @@ def run_server():
         if reader is not None:
             try:
                 reader.stop()
+
             except Exception as error:
                 print(f"[WARNING] Could not stop RFID reader: {error}")
 
@@ -1882,6 +2909,7 @@ def run_server():
         if mqttProj is not None:
             try:
                 mqttProj.stop()
+
             except Exception as error:
                 print(f"[WARNING] Could not stop MQTT: {error}")
 

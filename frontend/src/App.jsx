@@ -11,7 +11,7 @@ import "./assets/css/05_Dashboard_Styles.css";
 import "./assets/css/06_Checkout_Styles.css";
 import "./assets/css/07_Products_Styles.css";
 import "./assets/css/08_Toast_Styles.css";
-import "./assets/css/99_Testing_Styles.css";
+import "./assets/css/09_Overview_Styles.css";
 
 // PAGE IMPORTS:
 import Account from "./pages/account";
@@ -19,6 +19,7 @@ import FridgeDashboard from "./pages/fridgeDashboard";
 import Home from "./pages/home";
 import Login from "./pages/login";
 import ProductDashboard from "./pages/productDashboard";
+import OverviewDashboard from "./pages/overviewDashboard";
 import Products from "./pages/products";
 import Purchases from "./pages/purchases";
 import Registration from "./pages/registration";
@@ -65,7 +66,7 @@ function AppContent() {
         <Route path="/customer/settings" element={<Settings />} />
 
         {/* Admin dashboard */}
-        <Route path="/dashboard" element={<p>Create overview of all dashboards(generalized stats)</p>} />
+        <Route path="/dashboard" element={<OverviewDashboard />} />
         <Route path="/dashboard/inventory" element={<ProductDashboard />} />
         <Route path="/dashboard/reports" element={<Reports />} />
         <Route path="/dashboard/fridges" element={<FridgeDashboard />} />

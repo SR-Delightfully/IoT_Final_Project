@@ -88,7 +88,6 @@ body::before {
   content: "";
   height: 100vh;
   width: 100vw;
-  border: 2px solid hotpink;
   background-image: url("https://i.pinimg.com/736x/b0/80/0e/b0800eb37fa3fa1e4750d6a05f771cf3.jpg");
   background-size: 20%;
   image-rendering: pixelated;
@@ -365,11 +364,6 @@ label > h5 {
   position: absolute;
 }
 
-.testing {
-  min-height: 500vh;
-  border: 2px solid hotpink;
-}
-
 .header h1 {
   margin: 0.35rem 0;
   color: var(--gold-7);
@@ -494,6 +488,11 @@ label > h5 {
 .nav-link {
   position: relative;
   font-weight: 600;
+  display: inline-block;
+  box-sizing: border-box;
+  text-align: center;
+  width: 8rem;
+
   letter-spacing: 0.07rem;
   text-transform: uppercase;
   text-decoration: none;
@@ -522,7 +521,10 @@ label > h5 {
 
 .nav-link-active::before {
   content: "✦";
-  margin-right: 0.4rem;
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--gold-6);
   font-size: 0.65rem;
 }
