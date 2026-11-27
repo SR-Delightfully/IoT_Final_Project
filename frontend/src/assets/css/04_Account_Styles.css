@@ -505,3 +505,80 @@
   overflow-y: auto;
   padding-right: 8px;
 }
+/* MEMBERSHIP CARD */
+.membership-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "top top"
+    "holder points"
+    "barcode barcode";
+  gap: 0.75rem 1rem;
+  width: 100%;
+  max-width: 24rem;
+  aspect-ratio: 1.586;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  color: var(--gold-8);
+  border: 3px double var(--gold-4);
+  border-radius: 0.75rem;
+  background: linear-gradient(145deg, var(--blue-3) 0%, var(--blue-1) 60%, var(--gold-1) 100%);
+  box-shadow:
+    0 6px 18px var(--tone-0),
+    inset 0 1px 0 var(--tone-5);
+}
+
+.membership-card-top {
+  grid-area: top;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.membership-card-store {
+  letter-spacing: 0.15rem;
+  font-weight: 800;
+}
+
+.membership-card-tier {
+  padding: 0.1rem 0.5rem;
+  color: var(--blue-0);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  background: linear-gradient(145deg, var(--gold-6) 0%, var(--gold-3) 100%);
+}
+
+.membership-card-holder {
+  grid-area: holder;
+}
+
+.membership-card-points {
+  grid-area: points;
+  text-align: right;
+}
+
+.membership-card-holder,
+.membership-card-points {
+  display: flex;
+  flex-flow: column nowrap;
+}
+
+.membership-card-label {
+  color: var(--tone-8);
+  font-size: 0.65rem;
+  letter-spacing: 0.1rem;
+}
+
+.membership-card-barcode {
+  grid-area: barcode;
+  display: flex;
+  justify-content: center;
+}
+
+.membership-card-barcode svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
+}

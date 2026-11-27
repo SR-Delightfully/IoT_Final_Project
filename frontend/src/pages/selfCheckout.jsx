@@ -187,6 +187,28 @@ import translations from "../assets/translations/self_checkout.json";
               barcodeRef.current?.focus();
           }
       }, [screen]);
+      // Leaving this page (another page, closing or reloading the tab) cancels
+      // the open sale so the RFID reader is free for the inventory dashboard.
+      const openSessionRef = useRef(null);
+      useEffect(() => {
+          openSessionRef.current = sessionId && sessionStatus === "ACTIVE" ? sessionId : null;
+      }, [sessionId, sessionStatus]);
+      useEffect(() => {
+          const cancelOpenSale = () => {
+              const id = openSessionRef.current;
+              if (!id) return;
+              openSessionRef.current = null;
+              fetch(`${API_URL}/checkout/session/${id}/cancel`, {
+                  method: "POST",
+                  keepalive: true,
+              }).catch(() => {});
+          };
+          window.addEventListener("pagehide", cancelOpenSale);
+          return () => {
+              window.removeEventListener("pagehide", cancelOpenSale);
+              cancelOpenSale();
+          };
+      }, []);
       const startSession = async () => {
           if (sessionLoading) return;
           setSessionLoading(true);
@@ -238,10 +260,33 @@ import translations from "../assets/translations/self_checkout.json";
               setUpdatingProduct(null);
           }
       };
+      const scanMembershipCard = async (code) => {
+          if (account) {
+              setBarcodeMessage(t("An account is already signed in for this sale."));
+              return;
+          }
+          try {
+              const data = await request(`/checkout/session/${sessionId}/card`, {
+                  method: "POST",
+                  body: JSON.stringify({ code }),
+              });
+              setAccount(data.account || null);
+              setBarcodeMessage(`${t("Welcome")}, ${data.account?.first_name || ""}!`);
+          } catch (error) {
+              setBarcodeMessage(error.message || t("Membership card not recognized."));
+          }
+      };
       const submitBarcode = async (event) => {
           event.preventDefault();
           const value = barcode.trim();
           if (!value) return;
+          // Membership cards are 12-digit codes starting with 4.
+          if (/^4\d{11}$/.test(value)) {
+              await scanMembershipCard(value);
+              setBarcode("");
+              barcodeRef.current?.focus();
+              return;
+          }
           const product = products.find((item) => {
               return item.barcode.toLowerCase() === value.toLowerCase();
           });

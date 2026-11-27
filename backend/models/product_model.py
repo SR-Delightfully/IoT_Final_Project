@@ -100,7 +100,87 @@ def _set_barcode(conn, product_id, upc):
         )
 
 
-def add_product(name, category, price, upc, producer, image_url=None):
+def get_categories():
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT category_id, category_name FROM Categories ORDER BY category_name"
+        ).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+class TagError(ValueError):
+    pass
+
+
+# Save scanned RFID tags for a product. Each new tag is one unit of stock,
+# recorded on a stock receipt. Runs inside the caller's transaction.
+def _receive_tags(conn, product_id, epcs, supplier=None):
+    epcs = list(dict.fromkeys(epcs))
+    if not epcs:
+        raise TagError("Scan at least one tag")
+
+    placeholders = ", ".join("?" for _ in epcs)
+    taken = conn.execute(
+        f"SELECT product_tag_epc FROM ProductTags "
+        f"WHERE UPPER(product_tag_epc) IN ({placeholders})",
+        epcs
+    ).fetchall()
+
+    if taken:
+        raise TagError(
+            "Already registered: " + ", ".join(row["product_tag_epc"] for row in taken)
+        )
+
+    conn.executemany(
+        "INSERT INTO ProductTags (product_id, product_tag_epc) VALUES (?, ?)",
+        [(product_id, epc) for epc in epcs]
+    )
+
+    receipt_id = conn.execute(
+        "INSERT INTO StockReceipts (stock_receipt_supplier) VALUES (?)",
+        (supplier,)
+    ).lastrowid
+
+    conn.execute(
+        """
+        INSERT INTO StockReceiptItems (
+            stock_receipt_id,
+            product_id,
+            stock_receipt_item_quantity
+        )
+        VALUES (?, ?, ?)
+        """,
+        (receipt_id, product_id, len(epcs))
+    )
+
+    conn.execute(
+        """
+        UPDATE Products
+        SET product_stock_quantity = product_stock_quantity + ?,
+            product_updated_at = CURRENT_TIMESTAMP
+        WHERE product_id = ?
+        """,
+        (len(epcs), product_id)
+    )
+
+    return len(epcs)
+
+
+def receive_tagged_stock(product_id, epcs, supplier=None):
+    with db_connection() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM Products WHERE product_id = ?",
+            (product_id,)
+        ).fetchone()
+
+        if not exists:
+            return None
+
+        return _receive_tags(conn, product_id, epcs, supplier)
+
+
+def add_product(name, category, price, upc, producer, image_url=None, epcs=None, supplier=None):
     with db_connection() as conn:
         cursor = conn.execute(
             """
@@ -118,6 +198,9 @@ def add_product(name, category, price, upc, producer, image_url=None):
 
         product_id = cursor.lastrowid
         _set_barcode(conn, product_id, upc)
+
+        if epcs:
+            _receive_tags(conn, product_id, epcs, supplier)
 
         return product_id
 
