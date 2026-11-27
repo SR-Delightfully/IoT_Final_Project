@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
+import { downloadInventoryCsv } from "../utils/reports";
 
 const API = import.meta.env.VITE_API_URL;
 const OTHER_CATEGORY = "__other";
@@ -104,7 +105,7 @@ function useTagScan(onError) {
   useEffect(
     () => () => {
       if (activeRef.current) {
-        adminRequest("/admin/scan/stop", "POST", undefined, { keepalive: true }).catch(() => {});
+        adminRequest("/admin/scan/stop", "POST", undefined, { keepalive: true }).catch(() => { });
       }
     },
     [],
@@ -316,6 +317,12 @@ function ProductDashboard() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+
+
+  // Remember the inventory search text and selected category.
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+
   const upcRef = useRef(null);
 
   const handleError = useCallback(
@@ -331,23 +338,33 @@ function ProductDashboard() {
 
   const tagScan = useTagScan(handleError);
 
+  // Load product details, stock, restocking dates and category choices.
   const loadProducts = useCallback(() => {
     adminRequest("/admin/products")
       .then((data) => {
         setProducts(data);
         setDenied(false);
+        setLoadError("");
       })
       .catch((err) => {
         if (err.status !== 403) setLoadError(err.message);
         handleError(err);
       });
+
     adminRequest("/admin/categories")
       .then(setCategories)
-      .catch(() => {});
+      .catch(() => { });
   }, [handleError]);
 
+  // Refresh inventory every five seconds while this page is open.
   useEffect(() => {
-    if (localStorage.getItem("token")) loadProducts();
+    if (!localStorage.getItem("token")) return;
+
+    loadProducts();
+
+    const interval = setInterval(loadProducts, 5000);
+
+    return () => clearInterval(interval);
   }, [loadProducts]);
 
   useEffect(() => {
@@ -489,6 +506,16 @@ function ProductDashboard() {
       </main>
     );
   }
+  // List each category once for the dropdown.
+  const inventoryCategories = [
+    ...new Set((products || []).map((p) => p.product_category).filter(Boolean)),
+  ].sort();
+
+  // Filter the displayed products by name and category.
+  const filteredProducts = (products || []).filter((p) =>
+    p.product_name.toLowerCase().includes(search.trim().toLowerCase()) &&
+    (category === "" || p.product_category === category)
+  );
 
   const totalStock = (products || []).reduce((sum, p) => sum + p.quantity_in_stock, 0);
   const activeCount = (products || []).filter((p) => p.product_active).length;
@@ -652,6 +679,42 @@ function ProductDashboard() {
 
               <section className="account-section">
                 <h2 className="account-section-title">Inventory</h2>
+                <button
+                  type="button"
+                  className="account-button inventory-export-button"
+                  onClick={() => downloadInventoryCsv(filteredProducts)}
+                  disabled={filteredProducts.length === 0}
+                >
+                  Download Inventory CSV
+                </button>
+                <div className="dashboard-form inventory-filters">
+                  <div>
+                    <label htmlFor="inventory-search">Search products</label>
+                    <input
+                      id="inventory-search"
+                      type="search"
+                      placeholder="Product name"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="inventory-category">Category</label>
+                    <select
+                      id="inventory-category"
+                      value={category}
+                      onChange={(event) => setCategory(event.target.value)}
+                    >
+                      <option value="">All categories</option>
+                      {inventoryCategories.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="history-scroll dashboard-scroll">
                   <table className="history-table">
                     <thead>
@@ -661,16 +724,22 @@ function ProductDashboard() {
                         <th>Category</th>
                         <th>Price</th>
                         <th>Stock</th>
+                        <th>Last Restocked</th>
                         <th>Sold</th>
                         <th>Status</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
-                      {products.map((p) =>
+                      {filteredProducts.length === 0 && (
+                        <tr>
+                          <td colSpan={9}>No products match your filters.</td>
+                        </tr>
+                      )}
+                      {filteredProducts.map((p) =>
                         editingId === p.product_id ? (
                           <tr key={p.product_id}>
-                            <td colSpan={8}>
+                            <td colSpan={9}>
                               <ProductForm
                                 form={editForm}
                                 onChange={setEditForm}
@@ -693,9 +762,27 @@ function ProductDashboard() {
                             </td>
                             <td>{p.product_category}</td>
                             <td>{formatPrice(p.product_price_cents)}</td>
-                            <td className={p.quantity_in_stock <= 0 ? "product-stock-out" : ""}>
-                              {p.quantity_in_stock}
+                            <td>
+                              <span
+                                className={
+                                  p.quantity_in_stock === 0
+                                    ? "inventory-stock-empty"
+                                    : p.quantity_in_stock < 5
+                                      ? "inventory-stock-low"
+                                      : "inventory-stock-ok"
+                                }
+                                title={
+                                  p.quantity_in_stock === 0
+                                    ? "Out of stock"
+                                    : p.quantity_in_stock < 5
+                                      ? "Low stock"
+                                      : "Available"
+                                }
+                              >
+                                {p.quantity_in_stock}
+                              </span>
                             </td>
+                            <td>{p.last_restocked || "Never recorded"}</td>
                             <td>{p.total_sold}</td>
                             <td>
                               <button
