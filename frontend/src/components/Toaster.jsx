@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { translate } from "../utils/i18n";
 
 // Pop-up notifications.
 // Wrap the app in <ToastProvider>, then in any page:
@@ -70,8 +71,8 @@ export function ToastProvider({ children }) {
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast-${t.type}`} role={t.type === "error" ? "alert" : "status"}>
             <span className="toast-icon">{ICONS[t.type]}</span>
-            <p className="toast-message">{t.message}</p>
-            <button type="button" className="toast-close" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+            <p className="toast-message">{translate(t.message)}</p>
+            <button type="button" className="toast-close" aria-label={translate("Dismiss")} onClick={() => dismiss(t.id)}>
               ×
             </button>
           </div>

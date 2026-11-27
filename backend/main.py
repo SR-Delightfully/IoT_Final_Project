@@ -35,7 +35,10 @@ from models.management_models.model_alerts import get_alerts_with_fridge, acknow
 from models.management_models.model_notifications import (
     get_user_notifications,
     get_all_notifications_detailed,
-    mark_notification_read
+    mark_notification_read,
+    notify,
+    get_bell_notifications,
+    mark_user_notifications_read
 )
 from models.management_models.model_stock_receipts import add_stock_receipt
 from models.report_model import (
@@ -597,10 +600,31 @@ class Server(BaseHTTPRequestHandler):
 
             return
 
-        # Notifications for a user
+        # The signed-in user's notification bell
+        if path == "/me/notifications":
+            user = self.require_user()
+            if not user:
+                return
+
+            notifications = get_bell_notifications(user["user_id"])
+            self.send_json(200, {
+                "unread": sum(1 for n in notifications if not n["notification_read_at"]),
+                "notifications": notifications,
+            })
+            return
+
+        # Notifications for a user (that user or an admin only)
         if len(parts) == 3 and parts[0] == "users" and parts[2] == "notifications":
             if not parts[1].isdigit():
                 self.send_json(400, {"error": "Invalid user ID"})
+                return
+
+            user = self.require_user()
+            if not user:
+                return
+
+            if user["user_id"] != int(parts[1]) and user["user_role"] != "admin":
+                self.send_json(403, {"error": "You can only view your own notifications"})
                 return
 
             notifications = get_user_notifications(int(parts[1]))
@@ -652,6 +676,25 @@ class Server(BaseHTTPRequestHandler):
 
         if parts == ["me", "password"]:
             self.change_password_route()
+            return
+
+        # Bell: mark all, or one, of your own notifications as read
+        if parts == ["me", "notifications", "read-all"] or (
+            len(parts) == 4 and parts[:2] == ["me", "notifications"] and parts[3] == "read"
+        ):
+            user = self.require_user()
+            if not user:
+                return
+
+            notification_id = None
+            if len(parts) == 4:
+                if not parts[2].isdigit():
+                    self.send_json(400, {"error": "Invalid notification ID"})
+                    return
+                notification_id = int(parts[2])
+
+            changed = mark_user_notifications_read(user["user_id"], notification_id)
+            self.send_json(200, {"marked_read": changed})
             return
 
         if len(parts) == 2 and parts[0] == "products":
@@ -1109,7 +1152,8 @@ class Server(BaseHTTPRequestHandler):
                         try:
                             send_receipt_email(
                                 customer["user_email"],
-                                receipt
+                                receipt,
+                                "fr" if data.get("language") == "fr" else "en"
                             )
                             receipt["email_status"] = "sent"
                         except Exception as error:
@@ -1463,6 +1507,16 @@ class Server(BaseHTTPRequestHandler):
                 """,
                 (customer["customer_id"],)
             ).fetchone()["customer_membership_points"]
+
+            notify(
+                conn,
+                user["user_id"],
+                "reward",
+                "Reward redeemed",
+                f"{reward['reward_name']} for {points_cost} points. {balance} points left.",
+                link="/customer",
+                data={"reward": reward["reward_name"], "points": points_cost, "balance": balance},
+            )
 
             conn.commit()
             self.send_json(201, {

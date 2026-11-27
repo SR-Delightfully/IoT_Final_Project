@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatPrice as formatLocalPrice } from "../utils/purchases";
 import { useToast } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
 import { downloadInventoryCsv } from "../utils/reports";
+import { downloadInventoryPdf } from "../utils/reportPdfs";
+import { useI18n } from "../utils/i18n";
 
 const API = import.meta.env.VITE_API_URL;
 const OTHER_CATEGORY = "__other";
@@ -18,7 +21,7 @@ const EMPTY_FORM = {
 };
 
 function formatPrice(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatLocalPrice(cents);
 }
 
 function toCents(dollars) {
@@ -62,6 +65,7 @@ function isLowStock(p) {
 
 // Edit the low / moderate stock levels for each category.
 function StockLevelSettings({ categories, onSaved, onError }) {
+  const { t } = useI18n();
   const [drafts, setDrafts] = useState({});
   const [savingId, setSavingId] = useState(null);
 
@@ -110,19 +114,19 @@ function StockLevelSettings({ categories, onSaved, onError }) {
 
   return (
     <details className="account-section stock-level-settings">
-      <summary className="account-section-title">Stock alert levels by category</summary>
+      <summary className="account-section-title">{t("Stock alert levels by category")}</summary>
       <p className="points-next">
-        <span className="inventory-stock-low">Red</span> at or below the low level,{" "}
-        <span className="inventory-stock-moderate">yellow</span> at or below the moderate level,{" "}
-        <span className="inventory-stock-ok">green</span> above it.
+        <span className="inventory-stock-low">{t("Red")}</span> {t("at or below the low level,")}{" "}
+        <span className="inventory-stock-moderate">{t("yellow")}</span> {t("at or below the moderate level,")}{" "}
+        <span className="inventory-stock-ok">{t("green")}</span> {t("above it.")}
       </p>
       <div className="history-scroll">
         <table className="history-table">
           <thead>
             <tr>
-              <th>Category</th>
-              <th>Low (red)</th>
-              <th>Moderate (yellow)</th>
+              <th>{t("Category")}</th>
+              <th>{t("Low (red)")}</th>
+              <th>{t("Moderate (yellow)")}</th>
               <th />
             </tr>
           </thead>
@@ -136,7 +140,7 @@ function StockLevelSettings({ categories, onSaved, onError }) {
                     min="0"
                     step="1"
                     className="stock-level-input"
-                    aria-label={`${c.category_name} low stock level`}
+                    aria-label={t("{0} low stock level", { 0: c.category_name })}
                     value={value(c, "category_low_threshold")}
                     onChange={(e) => change(c, "category_low_threshold", e.target.value)}
                   />
@@ -147,7 +151,7 @@ function StockLevelSettings({ categories, onSaved, onError }) {
                     min="0"
                     step="1"
                     className="stock-level-input"
-                    aria-label={`${c.category_name} moderate stock level`}
+                    aria-label={t("{0} moderate stock level", { 0: c.category_name })}
                     value={value(c, "category_moderate_threshold")}
                     onChange={(e) => change(c, "category_moderate_threshold", e.target.value)}
                   />
@@ -159,7 +163,7 @@ function StockLevelSettings({ categories, onSaved, onError }) {
                     disabled={savingId === c.category_id || !drafts[c.category_id]}
                     onClick={() => save(c)}
                   >
-                    {savingId === c.category_id ? "Saving..." : "Save"}
+                    {savingId === c.category_id ? t("Saving...") : t("Save")}
                   </button>
                 </td>
               </tr>
@@ -253,6 +257,7 @@ function useTagScan(onError) {
 }
 
 function ScanPanel({ tagScan, supplier, onSupplierChange }) {
+  const { t } = useI18n();
   const { scan, start, stop, clear, remove } = tagScan;
   const registered = scan.tags.filter((t) => t.status === "registered");
   const fresh = scan.tags.filter((t) => t.status === "new");
@@ -262,11 +267,11 @@ function ScanPanel({ tagScan, supplier, onSupplierChange }) {
       <div className="dashboard-scan-bar">
         {scan.active ? (
           <button type="button" className="dashboard-btn-small" onClick={stop}>
-            Stop scanning
+            {t("Stop scanning")}
           </button>
         ) : (
           <button type="button" className="dashboard-btn-small" onClick={start}>
-            Start scanning
+            {t("Start scanning")}
           </button>
         )}
         <button
@@ -275,12 +280,12 @@ function ScanPanel({ tagScan, supplier, onSupplierChange }) {
           onClick={clear}
           disabled={!scan.tags.length}
         >
-          Clear
+          {t("Clear")}
         </button>
         <span className={`dashboard-scan-status ${scan.active ? "is-active" : ""}`}>
-          {scan.active ? "Reader is scanning tags..." : "Reader idle"}
+          {scan.active ? t("Reader is scanning tags...") : t("Reader idle")}
         </span>
-        <span className="dashboard-scan-count">{fresh.length} new tag(s)</span>
+        <span className="dashboard-scan-count">{fresh.length} {t("new tag(s)")}</span>
       </div>
 
       {fresh.length > 0 && (
@@ -292,7 +297,7 @@ function ScanPanel({ tagScan, supplier, onSupplierChange }) {
                 type="button"
                 className="dashboard-tag-remove"
                 onClick={() => remove(tag.epc)}
-                aria-label={`Remove ${tag.epc}`}
+                aria-label={t("Remove {0}", { 0: tag.epc })}
               >
                 ×
               </button>
@@ -303,7 +308,7 @@ function ScanPanel({ tagScan, supplier, onSupplierChange }) {
 
       {registered.length > 0 && (
         <div className="dashboard-error">
-          Skipped {registered.length} tag(s) already registered:
+          {t("Skipped")} {registered.length} {t("tag(s) already registered:")}
           <ul className="dashboard-tag-list">
             {registered.map((tag) => (
               <li key={tag.epc}>
@@ -312,7 +317,7 @@ function ScanPanel({ tagScan, supplier, onSupplierChange }) {
                   type="button"
                   className="dashboard-tag-remove"
                   onClick={() => remove(tag.epc)}
-                  aria-label={`Remove ${tag.epc}`}
+                  aria-label={t("Remove {0}", { 0: tag.epc })}
                 >
                   ×
                 </button>
@@ -324,7 +329,7 @@ function ScanPanel({ tagScan, supplier, onSupplierChange }) {
 
       <input
         className="dashboard-supplier"
-        placeholder="Supplier (optional)"
+        placeholder={t("Supplier (optional)")}
         value={supplier}
         onChange={(e) => onSupplierChange(e.target.value)}
       />
@@ -342,6 +347,7 @@ function ProductForm({
   onUpcEnter,
   submitDisabled,
 }) {
+  const { t } = useI18n();
   const update = (e) => onChange({ ...form, [e.target.name]: e.target.value });
   const knownCategory =
     !form.category ||
@@ -350,10 +356,10 @@ function ProductForm({
 
   return (
     <form className="dashboard-form" onSubmit={onSubmit}>
-      <input name="name" placeholder="Name" value={form.name} onChange={update} required />
+      <input name="name" placeholder={t("Name")} value={form.name} onChange={update} required />
       <select name="category" value={form.category} onChange={update} required>
         <option value="" disabled>
-          Category
+          {t("Category")}
         </option>
         {!knownCategory && <option value={form.category}>{form.category}</option>}
         {categories.map((c) => (
@@ -361,12 +367,12 @@ function ProductForm({
             {c.category_name}
           </option>
         ))}
-        <option value={OTHER_CATEGORY}>Other…</option>
+        <option value={OTHER_CATEGORY}>{t("Other…")}</option>
       </select>
       {form.category === OTHER_CATEGORY && (
         <input
           name="newCategory"
-          placeholder="New category name"
+          placeholder={t("New category name")}
           value={form.newCategory}
           onChange={update}
           required
@@ -377,14 +383,14 @@ function ProductForm({
         type="number"
         min="0"
         step="0.01"
-        placeholder="Price ($)"
+        placeholder={t("Price ($)")}
         value={form.price}
         onChange={update}
         required
       />
       <input
         name="upc"
-        placeholder="UPC (scan or type 12-13 digits)"
+        placeholder={t("UPC (scan or type 12-13 digits)")}
         minLength={12}
         maxLength={13}
         value={form.upc}
@@ -401,14 +407,14 @@ function ProductForm({
       />
       <input
         name="producer"
-        placeholder="Producer"
+        placeholder={t("Producer")}
         value={form.producer}
         onChange={update}
         required
       />
       <input
         name="image_url"
-        placeholder="Image URL (optional)"
+        placeholder={t("Image URL (optional)")}
         value={form.image_url}
         onChange={update}
       />
@@ -418,7 +424,7 @@ function ProductForm({
         </button>
         {onCancel && (
           <button type="button" className="dashboard-btn-secondary" onClick={onCancel}>
-            Cancel
+            {t("Cancel")}
           </button>
         )}
       </div>
@@ -427,6 +433,7 @@ function ProductForm({
 }
 
 function ProductDashboard() {
+  const { t } = useI18n();
   const [products, setProducts] = useState(null);
   const [categories, setCategories] = useState([]);
   const [denied, setDenied] = useState(!localStorage.getItem("token"));
@@ -492,11 +499,11 @@ function ProductDashboard() {
       lowNow
         .filter((p) => !knownLowIds.current.has(p.product_id))
         .forEach((p) =>
-          toast.error(`Low stock: ${p.product_name} (${p.quantity_in_stock} left)`)
+          toast.error(t("Low stock: {product} ({quantity} left)", { product: p.product_name, quantity: p.quantity_in_stock }))
         );
     }
     knownLowIds.current = new Set(lowNow.map((p) => p.product_id));
-  }, [products, toast]);
+  }, [products, toast, t]);
 
   // Refresh inventory every five seconds while this page is open.
   useEffect(() => {
@@ -638,12 +645,12 @@ function ProductDashboard() {
       <main className="products-page">
         <div className="products-card">
           <div className="products-card-body">
-            <h1 className="products-title">Access Denied</h1>
-            <p className="products-message">Only admins can view the product dashboard.</p>
+            <h1 className="products-title">{t("Access Denied")}</h1>
+            <p className="products-message">{t("Only admins can view the product dashboard.")}</p>
           </div>
         </div>
         <div className="products-links">
-          <a href="/products">View products</a>
+          <a href="/products">{t("View products")}</a>
         </div>
       </main>
     );
@@ -670,37 +677,37 @@ function ProductDashboard() {
     <main className="products-page">
       <div className="products-card dashboard-card">
         <div className="products-card-body">
-          <h1 className="products-title">Product Dashboard</h1>
+          <h1 className="products-title">{t("Product Dashboard")}</h1>
 
           <p className="products-subtitle">
-            <i>manage the catalogue and stock.</i>
+            <i>{t("manage the catalogue and stock.")}</i>
           </p>
 
           {!products ? (
             <p className="products-message">
-              <i>{loadError ? "Could not load products." : "loading products..."}</i>
+              <i>{loadError ? t("Could not load products.") : t("loading products...")}</i>
             </p>
           ) : (
             <>
               <section className="account-section">
-                <h2 className="account-section-title">Overview</h2>
+                <h2 className="account-section-title">{t("Overview")}</h2>
                 <div className="points-summary">
                   <div className="points-stat">
-                    <span className="form-label">Visible</span>
+                    <span className="form-label">{t("Visible")}</span>
                     <span className="points-value">
                       {activeCount}/{products.length}
                     </span>
                   </div>
                   <div className="points-stat">
-                    <span className="form-label">Units in stock</span>
+                    <span className="form-label">{t("Units in stock")}</span>
                     <span className="points-value">{totalStock}</span>
                   </div>
                   <div className="points-stat">
-                    <span className="form-label">Out of stock</span>
+                    <span className="form-label">{t("Out of stock")}</span>
                     <span className="points-value">{outOfStock}</span>
                   </div>
                   <div className="points-stat">
-                    <span className="form-label">Low stock</span>
+                    <span className="form-label">{t("Low stock")}</span>
                     <span className="points-value inventory-stock-low">{lowStock.length}</span>
                   </div>
                 </div>
@@ -709,13 +716,13 @@ function ProductDashboard() {
               {lowStock.length > 0 && (
                 <div className="low-stock-banner" role="alert">
                   <strong>
-                    {lowStock.length} product{lowStock.length === 1 ? "" : "s"} low on stock:
+                    {lowStock.length} {t("product")}{lowStock.length === 1 ? "" : "s"} {t("low on stock:")}
                   </strong>{" "}
                   {lowStock
                     .slice(0, 6)
                     .map((p) => `${p.product_name} (${p.quantity_in_stock})`)
                     .join(", ")}
-                  {lowStock.length > 6 && `, and ${lowStock.length - 6} more`}
+                  {lowStock.length > 6 && t(", and {0} more", { 0: lowStock.length - 6 })}
                 </div>
               )}
 
@@ -730,14 +737,14 @@ function ProductDashboard() {
                         : cat
                     )
                   );
-                  toast.success(`Stock levels saved for ${c.category_name}.`);
+                  toast.success(t("Stock levels saved for {name}.", { name: c.category_name }));
                   loadProducts();
                 }}
                 onError={handleError}
               />
 
               <section className="account-section">
-                <h2 className="account-section-title">Add Products</h2>
+                <h2 className="account-section-title">{t("Add Products")}</h2>
 
                 <div className="dashboard-mode">
                   <button
@@ -745,14 +752,14 @@ function ProductDashboard() {
                     className={`dashboard-btn-small ${mode === "receive" ? "" : "dashboard-btn-secondary"}`}
                     onClick={() => mode !== "receive" && switchMode("receive")}
                   >
-                    Receiving stock of an existing product
+                    {t("Receiving stock of an existing product")}
                   </button>
                   <button
                     type="button"
                     className={`dashboard-btn-small ${mode === "new" ? "" : "dashboard-btn-secondary"}`}
                     onClick={() => mode !== "new" && switchMode("new")}
                   >
-                    Adding a new product
+                    {t("Adding a new product")}
                   </button>
                 </div>
 
@@ -761,18 +768,18 @@ function ProductDashboard() {
                     <form className="dashboard-stock dashboard-upc" onSubmit={selectByUpc}>
                       <input
                         ref={upcRef}
-                        placeholder="Scan or type the product's UPC"
+                        placeholder={t("Scan or type the product's UPC")}
                         value={upcInput}
                         onChange={(e) => setUpcInput(e.target.value)}
                         autoComplete="off"
                       />
                       <button type="submit" className="dashboard-btn-small" disabled={!upcInput.trim()}>
-                        Find
+                        {t("Find")}
                       </button>
                     </form>
                     {upcMessage && (
                       <div className="dashboard-error">
-                        {upcMessage}{" "}
+                        {t(upcMessage)}{" "}
                         <button
                           type="button"
                           className="dashboard-btn-small dashboard-btn-secondary"
@@ -782,7 +789,7 @@ function ProductDashboard() {
                             setNewProduct({ ...EMPTY_FORM, upc });
                           }}
                         >
-                          Add it as a new product
+                          {t("Add it as a new product")}
                         </button>
                       </div>
                     )}
@@ -795,7 +802,7 @@ function ProductDashboard() {
                       <div>
                         <b>{receiving.product_name}</b>
                         <div className="dashboard-subtext">
-                          UPC {receiving.product_upc} · {receiving.quantity_in_stock} in stock
+                          {t("UPC")} {receiving.product_upc} · {receiving.quantity_in_stock} {t("in stock")}
                         </div>
                       </div>
                       <button
@@ -803,7 +810,7 @@ function ProductDashboard() {
                         className="dashboard-btn-small dashboard-btn-secondary"
                         onClick={() => switchMode("receive")}
                       >
-                        Change product
+                        {t("Change product")}
                       </button>
                     </div>
                     <ScanPanel tagScan={tagScan} supplier={supplier} onSupplierChange={setSupplier} />
@@ -814,7 +821,7 @@ function ProductDashboard() {
                         onClick={confirmReceive}
                         disabled={!newCount || saving}
                       >
-                        Confirm receive ({newCount})
+                        {t("Confirm receive (")}{newCount})
                       </button>
                     </div>
                   </>
@@ -836,7 +843,7 @@ function ProductDashboard() {
                     />
                     {duplicate && (
                       <div className="dashboard-error">
-                        {duplicate.product_name} already uses this UPC.{" "}
+                        {duplicate.product_name} {t("already uses this UPC.")}{" "}
                         <button
                           type="button"
                           className="dashboard-btn-small dashboard-btn-secondary"
@@ -846,7 +853,7 @@ function ProductDashboard() {
                             switchMode("receive", product);
                           }}
                         >
-                          Receive stock instead
+                          {t("Receive stock instead")}
                         </button>
                       </div>
                     )}
@@ -856,35 +863,45 @@ function ProductDashboard() {
               </section>
 
               <section className="account-section">
-                <h2 className="account-section-title">Inventory</h2>
-                <button
-                  type="button"
-                  className="account-button inventory-export-button"
-                  onClick={() => downloadInventoryCsv(filteredProducts)}
-                  disabled={filteredProducts.length === 0}
-                >
-                  Download Inventory CSV
-                </button>
+                <h2 className="account-section-title">{t("Inventory")}</h2>
+                <div className="report-export-buttons">
+                  <button
+                    type="button"
+                    className="account-button"
+                    onClick={() => downloadInventoryCsv(filteredProducts)}
+                    disabled={filteredProducts.length === 0}
+                  >
+                    {t("Download Inventory CSV")}
+                  </button>
+                  <button
+                    type="button"
+                    className="account-button"
+                    onClick={() => downloadInventoryPdf(filteredProducts, { category, search })}
+                    disabled={filteredProducts.length === 0}
+                  >
+                    {t("Download Inventory PDF")}
+                  </button>
+                </div>
                 <div className="dashboard-form inventory-filters">
                   <div>
-                    <label htmlFor="inventory-search">Search products</label>
+                    <label htmlFor="inventory-search">{t("Search products")}</label>
                     <input
                       id="inventory-search"
                       type="search"
-                      placeholder="Product name"
+                      placeholder={t("Product name")}
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                     />
                   </div>
 
                   <div>
-                    <label htmlFor="inventory-category">Category</label>
+                    <label htmlFor="inventory-category">{t("Category")}</label>
                     <select
                       id="inventory-category"
                       value={category}
                       onChange={(event) => setCategory(event.target.value)}
                     >
-                      <option value="">All categories</option>
+                      <option value="">{t("All categories")}</option>
                       {inventoryCategories.map((name) => (
                         <option key={name} value={name}>
                           {name}
@@ -897,21 +914,21 @@ function ProductDashboard() {
                   <table className="history-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th>Price</th>
-                        <th>Stock</th>
-                        <th>Last Restocked</th>
-                        <th>Sold</th>
-                        <th>Status</th>
+                        <th>{t("ID")}</th>
+                        <th>{t("Name")}</th>
+                        <th>{t("Category")}</th>
+                        <th>{t("Price")}</th>
+                        <th>{t("Stock")}</th>
+                        <th>{t("Last Restocked")}</th>
+                        <th>{t("Sold")}</th>
+                        <th>{t("Status")}</th>
                         <th />
                       </tr>
                     </thead>
                     <tbody>
                       {filteredProducts.length === 0 && (
                         <tr>
-                          <td colSpan={9}>No products match your filters.</td>
+                          <td colSpan={9}>{t("No products match your filters.")}</td>
                         </tr>
                       )}
                       {filteredProducts.map((p) =>
@@ -943,12 +960,12 @@ function ProductDashboard() {
                             <td>
                               <span
                                 className={`inventory-stock-badge inventory-stock-${stockLevel(p).key}`}
-                                title={`${stockLevel(p).label} (low ≤ ${p.category_low_threshold}, moderate ≤ ${p.category_moderate_threshold})`}
+                                title={t("{0} (low ≤ {1}, moderate ≤ {2})", { 0: stockLevel(p).label, 1: p.category_low_threshold, 2: p.category_moderate_threshold })}
                               >
                                 {p.quantity_in_stock}
                               </span>
                             </td>
-                            <td>{p.last_restocked || "Never recorded"}</td>
+                            <td>{p.last_restocked || t("Never recorded")}</td>
                             <td>{p.total_sold}</td>
                             <td>
                               <button
@@ -956,7 +973,7 @@ function ProductDashboard() {
                                 className="dashboard-btn-small dashboard-btn-secondary"
                                 onClick={() => toggleActive(p)}
                               >
-                                {p.product_active ? "Visible" : "Hidden"}
+                                {p.product_active ? t("Visible") : t("Hidden")}
                               </button>
                             </td>
                             <td>
@@ -968,7 +985,7 @@ function ProductDashboard() {
                                   setEditForm(productToForm(p));
                                 }}
                               >
-                                Edit
+                                {t("Edit")}
                               </button>
                             </td>
                           </tr>
@@ -983,8 +1000,8 @@ function ProductDashboard() {
         </div>
       </div>
       <div className="products-links">
-        <a href="/products">View storefront</a>
-        <a href="/home">Back to home</a>
+        <a href="/products">{t("View storefront")}</a>
+        <a href="/home">{t("Back to home")}</a>
       </div>
     </main>
   );

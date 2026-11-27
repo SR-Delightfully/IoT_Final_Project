@@ -4,6 +4,7 @@ import EnvironmentSensor from "../components/EnvironmentSensor";
 import { useToast } from "../components/Toaster";
 import Header from "../layout/header";
 import { authHeaders } from "../utils/auth";
+import { useI18n } from "../utils/i18n";
 
 const API = "http://localhost:5050";
 const REFRESH_MS = 2000;
@@ -36,6 +37,7 @@ function Stat({ label, value, detail, status = "" }) {
 }
 
 function AlertCenter({ alerts, onAcknowledge, busyIds }) {
+  const { t } = useI18n();
   const activeAlerts = alerts.filter(
     (alert) =>
       !["acknowledged", "resolved", "closed"].includes(
@@ -47,30 +49,30 @@ function AlertCenter({ alerts, onAcknowledge, busyIds }) {
     <section className="dashboard-panel" id="alerts">
       <header className="dashboard-panel-header">
         <div>
-          <span className="dashboard-eyebrow">02 / SYSTEM EVENTS</span>
-          <h2>Alert center</h2>
+          <span className="dashboard-eyebrow">{t("02 / SYSTEM EVENTS")}</span>
+          <h2>{t("Alert center")}</h2>
         </div>
-        <span className="dashboard-count">{activeAlerts.length} ACTIVE</span>
+        <span className="dashboard-count">{activeAlerts.length} {t("ACTIVE")}</span>
       </header>
 
       {activeAlerts.length === 0 ? (
-        <p className="dashboard-empty">No active alerts reported.</p>
+        <p className="dashboard-empty">{t("No active alerts reported.")}</p>
       ) : (
         <div className="dashboard-list">
           {activeAlerts.map((alert) => (
             <article className="dashboard-alert" key={alert.alert_id}>
               <span className="dashboard-alert-indicator" />
               <div className="dashboard-list-content">
-                <strong>{alert.alert_message || alert.alert_type || "Fridge alert"}</strong>
+                <strong>{t(alert.alert_message) || alert.alert_type || t("Fridge alert")}</strong>
                 <span>
-                  {alert.fridge_name || `Fridge ${alert.fridge_id}`}
-                  {alert.alert_value != null && ` · Value: ${alert.alert_value}`}
+                  {alert.fridge_name || t("Fridge {0}", { 0: alert.fridge_id })}
+                  {alert.alert_value != null && t(" · Value: {0}", { 0: alert.alert_value })}
                   {alert.alert_condition && ` · ${alert.alert_condition}`}
                 </span>
                 <time>
                   {alert.alert_created_at
                     ? new Date(alert.alert_created_at).toLocaleString()
-                    : "Time unavailable"}
+                    : t("Time unavailable")}
                 </time>
               </div>
               <button
@@ -79,7 +81,7 @@ function AlertCenter({ alerts, onAcknowledge, busyIds }) {
                 disabled={busyIds.includes(alert.alert_id)}
                 onClick={() => onAcknowledge(alert.alert_id)}
               >
-                Acknowledge
+                {t("Acknowledge")}
               </button>
             </article>
           ))}
@@ -90,6 +92,7 @@ function AlertCenter({ alerts, onAcknowledge, busyIds }) {
 }
 
 function NotificationCenter({ notifications, onRead, busyIds }) {
+  const { t } = useI18n();
   const unread = notifications.filter(
     (notification) =>
       !notification.notification_read_at &&
@@ -102,14 +105,14 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
     <section className="dashboard-panel" id="notifications">
       <header className="dashboard-panel-header">
         <div>
-          <span className="dashboard-eyebrow">03 / MESSAGE LOG</span>
-          <h2>Notifications</h2>
+          <span className="dashboard-eyebrow">{t("03 / MESSAGE LOG")}</span>
+          <h2>{t("Notifications")}</h2>
         </div>
-        <span className="dashboard-count">{unread.length} UNREAD</span>
+        <span className="dashboard-count">{unread.length} {t("UNREAD")}</span>
       </header>
 
       {notifications.length === 0 ? (
-        <p className="dashboard-empty">No notifications returned by the API.</p>
+        <p className="dashboard-empty">{t("No notifications returned by the API.")}</p>
       ) : (
         <div className="dashboard-list">
           {notifications.map((notification) => {
@@ -125,20 +128,20 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
                 <span className="dashboard-notification-indicator" />
                 <div className="dashboard-list-content">
                   <strong>
-                    {notification.notification_title || notification.notification_type || "Notification"}
+                    {notification.notification_title || notification.notification_type || t("Notification")}
                     {notification.notification_type && ` · ${notification.notification_type}`}
                   </strong>
                   <span>
-                    {notification.alert_message ||
-                      notification.message ||
-                      `Alert #${notification.alert_id ?? "—"}`}
+                    {t(notification.alert_message) ||
+                      t(notification.message) ||
+                      t("Alert #{0}", { 0: notification.alert_id ?? "—" })}
                   </span>
                   <span>
-                    Status: {notification.notification_status || "unknown"}
+                    {t("Status:")} {notification.notification_status || t("unknown")}
                     {notification.notification_sent_at &&
-                      ` · Sent ${new Date(
+                      t(" · Sent {0}", { 0: new Date(
                         notification.notification_sent_at
-                      ).toLocaleString()}`}
+                      ).toLocaleString() })}
                   </span>
                 </div>
                 {isUnread && (
@@ -148,7 +151,7 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
                     disabled={busyIds.includes(notification.notification_id)}
                     onClick={() => onRead(notification.notification_id)}
                   >
-                    Mark read
+                    {t("Mark read")}
                   </button>
                 )}
               </article>
@@ -163,6 +166,7 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
 const CLOSED_ALERT_STATUSES = ["acknowledged", "resolved", "closed"];
 
 function FridgeDashboard() {
+  const { t, locale } = useI18n();
   const toast = useToast();
   // alert ids already seen, so only alerts that appear after the page loads pop up
   const seenAlertIds = useRef(null);
@@ -190,8 +194,8 @@ function FridgeDashboard() {
     if (!response.ok) {
       throw new Error(
         response.status === 403
-          ? "Log in as an admin to change fridge settings."
-          : data.error || "Request failed"
+          ? t("Log in as an admin to change fridge settings.")
+          : t(data.error || "Request failed")
       );
     }
     return data;
@@ -208,7 +212,9 @@ function FridgeDashboard() {
             : f
         )
       );
-      toast.success(`${fridge.fridge_name}: fan turned ${on ? "on" : "off"}.`);
+      toast.success(
+        t(on ? "{name}: fan turned on." : "{name}: fan turned off.", { name: fridge.fridge_name })
+      );
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -225,7 +231,7 @@ function FridgeDashboard() {
           f.fridge_id === fridge.fridge_id ? { ...f, ...(data.fridge || limits) } : f
         )
       );
-      toast.success(`${fridge.fridge_name}: limits saved.`);
+      toast.success(t("{name}: limits saved.", { name: fridge.fridge_name }));
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -266,7 +272,10 @@ function FridgeDashboard() {
             .filter((alert) => !CLOSED_ALERT_STATUSES.includes(String(alert.alert_status ?? "").toLowerCase()))
             .forEach((alert) =>
               toast.error(
-                `${alert.fridge_name || `Fridge ${alert.fridge_id}`}: ${alert.alert_message || alert.alert_type || "New alert"}`
+                t("{fridge}: {message}", {
+                  fridge: alert.fridge_name || t("Fridge {0}", { 0: alert.fridge_id }),
+                  message: t(alert.alert_message || alert.alert_type || "New alert"),
+                })
               )
             );
         }
@@ -298,7 +307,7 @@ function FridgeDashboard() {
       active = false;
       clearInterval(timer);
     };
-  }, [toast]);
+  }, [toast, t]);
 
   async function updateRecord(path, method, setBusyIds, id, body = {}) {
     setBusyIds((current) => [...current, id]);
@@ -385,36 +394,36 @@ function FridgeDashboard() {
   );
 
   if (loading) {
-    return <main className="fridge-page"><p>Loading dashboard...</p></main>;
+    return <main className="fridge-page"><p>{t("Loading dashboard...")}</p></main>;
   }
 
   return (
     <main className="fridge-page dashboard-page">
       <Header
-        eyebrow="SMART TCG STORE / CONTROL ROOM"
-        title="System dashboard"
-        subtitle="Monitor fridge conditions, manage thresholds, and review system alerts"
-        misc={`Last updated: ${lastUpdated.toLocaleTimeString()}`}
+        eyebrow={t("SMART TCG STORE / CONTROL ROOM")}
+        title={t("System dashboard")}
+        subtitle={t("Monitor fridge conditions, manage thresholds, and review system alerts")}
+        misc={t("Last updated: {0}", { 0: lastUpdated.toLocaleTimeString(locale) })}
       >
       </Header>
 
 
-      <section className="dashboard-stats" aria-label="System overview">
+      <section className="dashboard-stats" aria-label={t("System overview")}>
         <Stat
-          label="REGISTERED FRIDGES"
+          label={t("REGISTERED FRIDGES")}
           value={fridges.length}
-          detail="Connected to database"
+          detail={t("Connected to database")}
         />
         <Stat
-          label="ACTIVE ALERTS"
+          label={t("ACTIVE ALERTS")}
           value={activeAlerts.length}
-          detail={alertError || "Require attention"}
+          detail={t(alertError || "Require attention")}
           status={activeAlerts.length ? "has-warning" : ""}
         />
         <Stat
-          label="UNREAD NOTIFICATIONS"
+          label={t("UNREAD NOTIFICATIONS")}
           value={unreadNotifications.length}
-          detail={notificationError || "Notification queue"}
+          detail={t(notificationError || "Notification queue")}
           status={unreadNotifications.length ? "has-warning" : ""}
         />
       </section>
@@ -426,7 +435,7 @@ function FridgeDashboard() {
       />
 
       {alertError && (
-        <p className="dashboard-error">{alertError}</p>
+        <p className="dashboard-error">{t(alertError)}</p>
       )}
 
       <NotificationCenter
@@ -436,23 +445,23 @@ function FridgeDashboard() {
       />
 
       {notificationError && (
-        <p className="dashboard-error">{notificationError}</p>
+        <p className="dashboard-error">{t(notificationError)}</p>
       )}
 
       <section className="dashboard-panel" id="fridges">
         <header className="dashboard-panel-header">
           <div>
-            <span className="dashboard-eyebrow">04 / HARDWARE MANAGEMENT</span>
-            <h2>Fridge systems</h2>
+            <span className="dashboard-eyebrow">{t("04 / HARDWARE MANAGEMENT")}</span>
+            <h2>{t("Fridge systems")}</h2>
           </div>
-          <span className="dashboard-count">{fridges.length} UNITS</span>
+          <span className="dashboard-count">{fridges.length} {t("UNITS")}</span>
         </header>
 
         <EnvironmentSensor fridges={fridges} />
 
         {fridges.length === 0 ? (
           <p className="dashboard-empty">
-            {error || "No fridges are currently available."}
+            {t(error) || t("No fridges are currently available.")}
           </p>
         ) : (
           <div className="fridge-grid">

@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import translations from "../assets/translations/self_checkout.json";
+import { currentLang, localeFor, translate, useI18n } from "../utils/i18n";
 
   import { useToast } from "../components/Toaster";
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5050";
   const emptyTotals = { subtotal: 0, gst: 0, qst: 0, total: 0 };
   const money = (amount) => {
-      return new Intl.NumberFormat("en-CA", {
+      return new Intl.NumberFormat(localeFor(currentLang()), {
           style: "currency",
           currency: "CAD",
       }).format(Number(amount) || 0);
@@ -57,7 +57,8 @@ import translations from "../assets/translations/self_checkout.json";
   const SelfCheckout = () => {
       const toast = useToast();
       const [screen, setscreen] = useState("welcome");
-      const [language, setLanguage] = useState("fr");
+      // Shared with the rest of the site (navbar switch, saved in the browser).
+      const { lang: language, setLang: setLanguage } = useI18n();
       const [account, setAccount] = useState(null);
       const [loyaltyMode, setLoyaltyMode] = useState("register");
       const [loyaltyEmail, setLoyaltyEmail] = useState("");
@@ -67,7 +68,7 @@ import translations from "../assets/translations/self_checkout.json";
       });
       const [loyaltyLoading, setLoyaltyLoading] = useState(false);
       const [loyaltyMessage, setLoyaltyMessage] = useState("");
-      const t = (english) => language === "fr" ? (translations[english] || english) : english;
+      const t = (english, params) => translate(english, params, language);
       const [products, setProducts] = useState([]);
       const [cart, setCart] = useState([]);
       const [totals, setTotals] = useState(emptyTotals);
@@ -389,6 +390,7 @@ import translations from "../assets/translations/self_checkout.json";
                   body: JSON.stringify({
                       session_id: sessionId,
                       payment_method: paymentMethod,
+                      language,
                   }),
               });
               const receiptItems = (data.items || cart).map((item) => {

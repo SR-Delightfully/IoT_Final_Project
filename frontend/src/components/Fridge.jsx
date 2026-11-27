@@ -1,6 +1,7 @@
 import TempGauge from "./TempGuage";
 import HumidityBar from "./HumidityBar";
 import Fan from "./Fan";
+import { useI18n } from "../utils/i18n";
 
 const LIMIT_FIELDS = [
   "fridge_min_temperature",
@@ -12,6 +13,7 @@ const LIMIT_FIELDS = [
 // The fan state comes from the database on every dashboard refresh, so a fan
 // turned on by an email "YES" shows here too.
 function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimits = false }) {
+  const { t } = useI18n();
   const fanStatus = Number(fridge.fridge_fan_on) === 1 ? "ON" : "OFF";
 
   function toggleFan() {
@@ -34,25 +36,25 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
           <h2 className="fridge-title">{fridge.fridge_name}</h2>
           <span className={`fridge-device-status ${fanStatus === "ON" ? "is-active" : ""}`}>
             <span className="device-status-dot" />
-            SYSTEM {fanStatus === "ON" ? "ACTIVE" : "STANDBY"}
+            {t("SYSTEM")} {fanStatus === "ON" ? t("ACTIVE") : t("STANDBY")}
           </span>
         </header>
 
         <div className="fridge-identity">
           <span className="fridge-unit-id">
-            UNIT / {String(fridge.fridge_id).padStart(2, "0")}
+            {t("UNIT /")} {String(fridge.fridge_id).padStart(2, "0")}
           </span>
           <span className="fridge-location">
-            {fridge.fridge_location || fridge.location || "LOCATION UNASSIGNED"}
+            {fridge.fridge_location || fridge.location || t("LOCATION UNASSIGNED")}
           </span>
         </div>
 
         <section className="fridge-fan-panel">
-          <span className="ceiling-label">COOLING ASSEMBLY</span>
+          <span className="ceiling-label">{t("COOLING ASSEMBLY")}</span>
           <Fan status={fanStatus} onToggle={toggleFan} disabled={fanBusy} />
           {fridge.fridge_fan_on === 1 && fridge.fridge_fan_source && (
             <span className="fridge-fan-source">
-              Turned on by {fridge.fridge_fan_source === "email" ? "email reply" : "dashboard"}
+              {t("Turned on by")} {fridge.fridge_fan_source === "email" ? t("email reply") : t("dashboard")}
             </span>
           )}
         </section>
@@ -60,12 +62,12 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
         <section className="fridge-monitoring">
           <div className="fridge-section-heading">
             <span>01</span>
-            <h3>LIVE TELEMETRY</h3>
+            <h3>{t("LIVE TELEMETRY")}</h3>
           </div>
 
           <div className="gauge-container">
             <div className="gauge temperature-panel">
-              <h4 className="fridge-subtitle">Temperature</h4>
+              <h4 className="fridge-subtitle">{t("Temperature")}</h4>
               <TempGauge
                 value={fridge.reading_temperature}
                 min={fridge.fridge_min_temperature}
@@ -74,7 +76,7 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
             </div>
 
             <div className="gauge humidity-panel">
-              <h4 className="fridge-subtitle">Humidity</h4>
+              <h4 className="fridge-subtitle">{t("Humidity")}</h4>
               <HumidityBar value={fridge.reading_humidity} />
             </div>
           </div>
@@ -87,13 +89,13 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
         >
           <div className="fridge-section-heading">
             <span>02</span>
-            <h3>OPERATING LIMITS</h3>
+            <h3>{t("OPERATING LIMITS")}</h3>
           </div>
 
           <div className="form-grid">
             <div className="form-field">
               <label htmlFor={`min-temp-${fridge.fridge_id}`} className="form-label">
-                Minimum temperature (°C)
+                {t("Minimum temperature (°C)")}
               </label>
               <input
                 type="number"
@@ -107,7 +109,7 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
 
             <div className="form-field">
               <label htmlFor={`max-temp-${fridge.fridge_id}`} className="form-label">
-                Maximum temperature (°C)
+                {t("Maximum temperature (°C)")}
               </label>
               <input
                 type="number"
@@ -121,7 +123,7 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
 
             <div className="form-field">
               <label htmlFor={`min-humidity-${fridge.fridge_id}`} className="form-label">
-                Minimum humidity (%)
+                {t("Minimum humidity (%)")}
               </label>
               <input
                 type="number"
@@ -136,7 +138,7 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
 
             <div className="form-field">
               <label htmlFor={`max-humidity-${fridge.fridge_id}`} className="form-label">
-                Maximum humidity (%)
+                {t("Maximum humidity (%)")}
               </label>
               <input
                 type="number"
@@ -150,18 +152,18 @@ function Fridge({ fridge, onToggleFan, onSaveLimits, fanBusy = false, savingLimi
             </div>
 
             <button className="fridge-save-button" type="submit" disabled={savingLimits}>
-              {savingLimits ? "SAVING..." : "SAVE LIMITS"}
+              {savingLimits ? t("SAVING...") : t("SAVE LIMITS")}
             </button>
           </div>
         </form>
 
         <footer className="fridge-footer">
-          <span className="footer-label">HARDWARE STATUS</span>
+          <span className="footer-label">{t("HARDWARE STATUS")}</span>
           <span className={`footer-fan-state ${fanStatus === "ON" ? "active" : ""}`}>
             <span className="fan-status-dot" />
-            FAN {fanStatus}
+            {t("FAN")} {fanStatus}
           </span>
-          <span className="footer-unit">FB-{fridge.fridge_id}</span>
+          <span className="footer-unit">{t("FB-")}{fridge.fridge_id}</span>
         </footer>
       </div>
     </article>

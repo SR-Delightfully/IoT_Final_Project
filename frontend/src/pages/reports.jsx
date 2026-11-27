@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchSalesReport, downloadSalesCsv, checkDateFilters } from "../utils/reports";
 import { formatPrice } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
 import SalesTable from "../components/SalesTable";
 import SalesChart from "../components/SalesChart";
 import CustomerActivityReport from "../components/CustomerActivityReport";
+import { downloadSalesPdf } from "../utils/reportPdfs";
+import { useI18n } from "../utils/i18n";
 
 const TABS = [
     { id: "sales", label: "Sales" },
@@ -12,24 +14,25 @@ const TABS = [
 ];
 
 function Reports() {
+  const { t } = useI18n();
     const [tab, setTab] = useState("sales");
 
     return (
         <main className="account-page sales-reports-page">
             <div className="account-card">
                 <div className="account-card-body">
-                    <h1 className="account-title">Reports</h1>
+                    <h1 className="account-title">{t("Reports")}</h1>
                     <div className="report-tabs" role="tablist">
-                        {TABS.map((t) => (
+                        {TABS.map((item) => (
                             <button
-                                key={t.id}
+                                key={item.id}
                                 type="button"
                                 role="tab"
-                                aria-selected={tab === t.id}
-                                className={`report-tab ${tab === t.id ? "is-active" : ""}`}
-                                onClick={() => setTab(t.id)}
+                                aria-selected={tab === item.id}
+                                className={`report-tab ${tab === item.id ? "is-active" : ""}`}
+                                onClick={() => setTab(item.id)}
                             >
-                                {t.label}
+                                {t(item.label)}
                             </button>
                         ))}
                     </div>
@@ -42,6 +45,8 @@ function Reports() {
 }
 
 function SalesReport() {
+  const { t } = useI18n();
+    const chartRef = useRef(null);
     const [report, setReport] = useState(null);
     const [error, setError] = useState("");
     // Store the selected sales-report dates.
@@ -105,22 +110,43 @@ function SalesReport() {
 
     return (
         <>
-                    <button
-                        type="button"
-                        className="account-button inventory-export-button"
-                        onClick={() =>
-                            downloadSalesCsv(
-                                report,
-                                products,
-                                category,
-                                categorySalesCents,
-                                categoryUnitsSold
-                            )
-                        }
-                        disabled={!report || Boolean(error)}
-                    >
-                        Download Sales CSV
-                    </button>
+                    <div className="report-export-buttons">
+                        <button
+                            type="button"
+                            className="account-button"
+                            onClick={() =>
+                                downloadSalesCsv(
+                                    report,
+                                    products,
+                                    category,
+                                    categorySalesCents,
+                                    categoryUnitsSold
+                                )
+                            }
+                            disabled={!report || Boolean(error)}
+                        >
+                            {t("Download Sales CSV")}
+                        </button>
+                        <button
+                            type="button"
+                            className="account-button"
+                            onClick={() =>
+                                downloadSalesPdf({
+                                    report,
+                                    products,
+                                    mostSold,
+                                    leastSold,
+                                    category,
+                                    salesCents: categorySalesCents,
+                                    unitsSold: categoryUnitsSold,
+                                    chartElement: chartRef.current,
+                                })
+                            }
+                            disabled={!report || Boolean(error)}
+                        >
+                            {t("Download Sales PDF")}
+                        </button>
+                    </div>
                     <div className="spending-section">
                         <DateFilters
                             startDate={startDate}
@@ -134,44 +160,46 @@ function SalesReport() {
                             onClick={applyFilters}
                             disabled={!report && !error}
                         >
-                            Apply filters
+                            {t("Apply filters")}
                         </button>
                     </div>
 
                     {error || !report ? (
                         <p className="points-next">
-                            {error || "Loading sales report..."}
+                            {t(error) || t("Loading sales report...")}
                         </p>
                     ) : (
                         <div className="sales-report-columns">
                             <div className="sales-report-overview">
                                 <div className="points-summary">
                                     <div className="points-stat">
-                                        <span className="form-label">Product Sales</span>
+                                        <span className="form-label">{t("Product Sales")}</span>
                                         <span className="points-value">
                                             {formatPrice(categorySalesCents)}
                                         </span>
                                     </div>
 
                                     <div className="points-stat">
-                                        <span className="form-label">Units Sold</span>
+                                        <span className="form-label">{t("Units Sold")}</span>
                                         <span className="points-value">
                                             {categoryUnitsSold}
                                         </span>
                                     </div>
                                 </div>
-                                <SalesChart dailySales={report.daily_sales} category={category} />
+                                <div ref={chartRef}>
+                                    <SalesChart dailySales={report.daily_sales} category={category} />
+                                </div>
                             </div>
 
                             <div className="sales-report-products">
                                 <div className="form-field sales-category-filter">
-                                    <label htmlFor="sales-category">Product category</label>
+                                    <label htmlFor="sales-category">{t("Product category")}</label>
                                     <select
                                         id="sales-category"
                                         value={category}
                                         onChange={(event) => setCategory(event.target.value)}
                                     >
-                                        <option value="">All categories</option>
+                                        <option value="">{t("All categories")}</option>
                                         {categories.map((name) => (
                                             <option key={name} value={name}>
                                                 {name}
@@ -181,18 +209,17 @@ function SalesReport() {
                                 </div>
 
                                 <p className="points-next">
-                                    Category filters apply to the totals, graph, product tables and rankings.
-                                    Product sales exclude tax and purchase-level discounts.
+                                    {t("Category filters apply to the totals, graph, product tables and rankings. Product sales exclude tax and purchase-level discounts.")}
                                 </p>
                                 <SalesTable
-                                    title="Units Sold by Product"
+                                    title={t("Units Sold by Product")}
                                     products={products}
                                 />
                             </div>
 
                             <div className="sales-rankings">
                                 <div className="form-field sales-ranking-filter">
-                                    <label htmlFor="sales-ranking-count">Products per ranking</label>
+                                    <label htmlFor="sales-ranking-count">{t("Products per ranking")}</label>
                                     <select
                                         id="sales-ranking-count"
                                         value={rankingCount}
@@ -207,8 +234,8 @@ function SalesReport() {
                                 </div>
 
                                 <div className="sales-ranking-tables">
-                                    <SalesTable title="Most Sold Products" products={mostSold} />
-                                    <SalesTable title="Least Sold Products" products={leastSold} />
+                                    <SalesTable title={t("Most Sold Products")} products={mostSold} />
+                                    <SalesTable title={t("Least Sold Products")} products={leastSold} />
                                 </div>
                             </div>
                         </div>

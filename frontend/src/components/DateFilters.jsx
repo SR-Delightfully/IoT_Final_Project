@@ -1,6 +1,7 @@
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import MaskedDateInput from "./MaskedDateInput";
+import { useI18n } from "../utils/i18n";
 
 function formatFilterDate(date) {
   if (!date) return "";
@@ -13,10 +14,11 @@ function formatFilterDate(date) {
 }
 
 function DateFilters({ startDate, endDate, setStartDate, setEndDate }) {
+  const { t } = useI18n();
   return (
     <div className="purchase-date-filters">
       <div className="form-field">
-        <label htmlFor="start-date">Start date</label>
+        <label htmlFor="start-date">{t("Start date")}</label>
         <DatePicker
           id="start-date"
           selected={startDate ? new Date(`${startDate}T00:00:00`) : null}
@@ -34,7 +36,7 @@ function DateFilters({ startDate, endDate, setStartDate, setEndDate }) {
       </div>
 
       <div className="form-field">
-        <label htmlFor="end-date">End date</label>
+        <label htmlFor="end-date">{t("End date")}</label>
         <DatePicker
           id="end-date"
           selected={endDate ? new Date(`${endDate}T00:00:00`) : null}

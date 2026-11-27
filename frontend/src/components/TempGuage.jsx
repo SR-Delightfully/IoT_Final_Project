@@ -1,5 +1,7 @@
+import { useI18n } from "../utils/i18n";
 
 function TempGauge({ value, min = 0, max = 10 }) {
+  const { t } = useI18n();
   const percentage =
     value == null || max <= min
       ? 0
@@ -13,7 +15,7 @@ function TempGauge({ value, min = 0, max = 10 }) {
         className="temperature-dial"
         style={{ "--gauge-angle": `${angle}deg` }}
         role="img"
-        aria-label={`Temp: ${value ?? "unavailable"} °C`}
+        aria-label={t("Temp: {0} °C", { 0: value ?? "unavailable" })}
       >
         <div className="temperature-needle" />
         <div className="temperature-center" />

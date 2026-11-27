@@ -414,6 +414,9 @@ CREATE TABLE IF NOT EXISTS Notifications (
     notification_created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     notification_sent_at TEXT,
     notification_read_at TEXT,
+    -- Page the bell opens, and {"kind": ..., values} so the UI can translate it
+    notification_link TEXT,
+    notification_data TEXT,
 
     FOREIGN KEY (user_id)
         REFERENCES Users(user_id)

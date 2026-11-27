@@ -7,8 +7,10 @@ import {
     ResponsiveContainer,
 } from "recharts";
 import { formatPrice } from "../utils/purchases";
+import { useI18n } from "../utils/i18n";
 
 function SalesChart({ dailySales, category = "" }) {
+  const { t } = useI18n();
     const totals = {};
 
     for (const row of dailySales) {
@@ -28,7 +30,7 @@ function SalesChart({ dailySales, category = "" }) {
     if (data.length === 0) {
         return (
             <p className="points-next">
-                No completed sales for this category and period.
+                {t("No completed sales for this category and period.")}
             </p>
         );
     }
@@ -36,10 +38,10 @@ function SalesChart({ dailySales, category = "" }) {
     return (
         <section className="account-section">
             <h2 className="account-section-title">
-                Daily Product Sales — {category || "All Categories"}
+                {t("Daily Product Sales —")} {category || t("All Categories")}
             </h2>
             <p className="points-next">
-                Before tax and purchase-level discounts.
+                {t("Before tax and purchase-level discounts.")}
             </p>
 
             <ResponsiveContainer width="100%" height={280}>
@@ -51,7 +53,7 @@ function SalesChart({ dailySales, category = "" }) {
                         stroke="var(--tone-8)"
                     />
                     <Tooltip
-                        formatter={(value) => [formatPrice(value), "Product sales"]}
+                        formatter={(value) => [formatPrice(value), t("Product sales")]}
                         contentStyle={{
                             backgroundColor: "var(--blue-1)",
                             borderColor: "var(--gold-2)",

@@ -1,0 +1,450 @@
+/* THEMES ------------------------------------------------------------------
+   Every page is built on three 0-9 colour scales (tone, blue, gold) that run
+   from dark to light. Light mode flips each scale, so a background that used
+   --tone-1 becomes light and text that used --tone-9 becomes dark.
+   Accent colours replace the gold scale.                                    */
+
+/* ---------- Accent colours (dark theme) ---------- */
+[data-accent="violet"] {
+  --gold-0: #07030c;
+  --gold-1: #160920;
+  --gold-2: #250d35;
+  --gold-3: #36144d;
+  --gold-4: #481a65;
+  --gold-5: #6b2796;
+  --gold-6: #8a3cb7;
+  --gold-7: #a65fd0;
+  --gold-8: #c9a0e0;
+  --gold-9: #faf8fc;
+}
+
+[data-accent="emerald"] {
+  --gold-0: #030c06;
+  --gold-1: #092014;
+  --gold-2: #0d351f;
+  --gold-3: #144d2d;
+  --gold-4: #1a653b;
+  --gold-5: #279657;
+  --gold-6: #2fb76a;
+  --gold-7: #44d084;
+  --gold-8: #7fdca8;
+  --gold-9: #f8fcfa;
+}
+
+[data-accent="crimson"] {
+  --gold-0: #0c0303;
+  --gold-1: #200909;
+  --gold-2: #350d0f;
+  --gold-3: #4d1418;
+  --gold-4: #651a20;
+  --gold-5: #962730;
+  --gold-6: #b72f3b;
+  --gold-7: #d04455;
+  --gold-8: #dc7f8a;
+  --gold-9: #fcf8f8;
+}
+
+/* ---------- Light theme: flipped scales ---------- */
+[data-theme="light"] {
+  --tone-0: #fbfafc;
+  --tone-1: #f3f0f4;
+  --tone-2: #e9e4ea;
+  --tone-3: #d9d1db;
+  --tone-4: #c4b8c6;
+  --tone-5: #9a88a6;
+  --tone-6: #7a6580;
+  --tone-7: #5e4b63;
+  --tone-8: #4a3d4c;
+  --tone-9: #161217;
+
+  --blue-0: #fbfbfd;
+  --blue-1: #f1f2f8;
+  --blue-2: #e4e6f2;
+  --blue-3: #d3d7ec;
+  --blue-4: #bcc2e2;
+  --blue-5: #8f98cc;
+  --blue-6: #6670b0;
+  --blue-7: #4b5594;
+  --blue-8: #2e3566;
+  --blue-9: #0f111b;
+
+  /* Panels that use the old named colours */
+  --card-bg: #ffffff;
+  --border-color: #d3d7ec;
+  --text-color: #161217;
+  --muted: #5e4b63;
+  --gold: var(--gold-6);
+}
+
+[data-theme="light"][data-accent="gold"],
+[data-theme="light"]:not([data-accent]) {
+  --gold-0: #fcf8f8;
+  --gold-1: #f6eed6;
+  --gold-2: #ecdcac;
+  --gold-3: #dcc27a;
+  --gold-4: #c9a54a;
+  --gold-5: #a8832a;
+  --gold-6: #8a6a1c;
+  --gold-7: #6e5314;
+  --gold-8: #4d3a0d;
+  --gold-9: #201609;
+}
+
+[data-theme="light"][data-accent="violet"] {
+  --gold-0: #faf8fc;
+  --gold-1: #f1e8f8;
+  --gold-2: #e0cdef;
+  --gold-3: #c9a0e0;
+  --gold-4: #a65fd0;
+  --gold-5: #8a3cb7;
+  --gold-6: #6b2796;
+  --gold-7: #561f79;
+  --gold-8: #3b1554;
+  --gold-9: #160920;
+}
+
+[data-theme="light"][data-accent="emerald"] {
+  --gold-0: #f8fcfa;
+  --gold-1: #e5f6ec;
+  --gold-2: #c3ead3;
+  --gold-3: #7fdca8;
+  --gold-4: #44c07a;
+  --gold-5: #279657;
+  --gold-6: #1d7a45;
+  --gold-7: #166137;
+  --gold-8: #0f4426;
+  --gold-9: #092014;
+}
+
+[data-theme="light"][data-accent="crimson"] {
+  --gold-0: #fcf8f8;
+  --gold-1: #f8e8ea;
+  --gold-2: #efc9cd;
+  --gold-3: #dc7f8a;
+  --gold-4: #d04455;
+  --gold-5: #b72f3b;
+  --gold-6: #962730;
+  --gold-7: #7a1f27;
+  --gold-8: #55151b;
+  --gold-9: #200909;
+}
+
+/* ---------- Light theme: page details ---------- */
+[data-theme="light"] body {
+  background: radial-gradient(
+    circle at 50% 35%,
+    #ffffff 0%,
+    var(--blue-1) 45%,
+    var(--tone-2) 100%
+  );
+}
+
+[data-theme="light"] body::before {
+  opacity: 12%;
+  mix-blend-mode: multiply;
+}
+
+/* Rules that hard-coded white text for the dark background */
+[data-theme="light"] .purchase-date-filters label,
+[data-theme="light"] .purchase-date-filters .react-datepicker__input-container input,
+[data-theme="light"] .product-history-section label,
+[data-theme="light"] .product-history-section input,
+[data-theme="light"] .product-history-section .purchase-items,
+[data-theme="light"] .inventory-filters label,
+[data-theme="light"] .inventory-filters input,
+[data-theme="light"] .inventory-filters select,
+[data-theme="light"] .inventory-filters select option,
+[data-theme="light"] .sales-reports-page .form-field label,
+[data-theme="light"] .sales-reports-page select,
+[data-theme="light"] .sales-reports-page select option {
+  color: var(--tone-9);
+  caret-color: var(--tone-9);
+}
+
+[data-theme="light"] .product-history-section input::placeholder,
+[data-theme="light"] .inventory-filters input::placeholder {
+  color: var(--tone-6);
+}
+
+/* Status colours that were picked for a dark background */
+[data-theme="light"] .inventory-stock-empty,
+[data-theme="light"] .inventory-stock-low {
+  color: #b42318;
+}
+
+[data-theme="light"] .inventory-stock-moderate {
+  color: #a15c07;
+}
+
+[data-theme="light"] .inventory-stock-ok {
+  color: #067647;
+}
+
+[data-theme="light"] .low-stock-banner {
+  border-color: #d92d20;
+  background: #fef3f2;
+}
+
+[data-theme="light"] .overview-tile.is-warning .overview-tile-value {
+  color: #b42318;
+}
+
+/* Chart tooltips are styled inline with the blue scale; keep them readable */
+[data-theme="light"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  color: var(--tone-9) !important;
+}
+
+[data-theme="light"] .recharts-tooltip-item {
+  color: var(--tone-9) !important;
+}
+
+/* ---------- Navbar tools: language, theme, notifications ---------- */
+.nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 0.75rem;
+}
+
+.nav-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--gold-4);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gold-7);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  position: relative;
+  transition: border-color var(--transition-2), background var(--transition-2);
+}
+
+.nav-tool-button:hover,
+.nav-tool-button[aria-expanded="true"] {
+  border-color: var(--gold-6);
+  background: color-mix(in srgb, var(--gold-6) 12%, transparent);
+}
+
+.nav-tool-button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.nav-tool {
+  position: relative;
+}
+
+.nav-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 10000;
+  min-width: 14rem;
+  padding: 0.75rem;
+  border: 1px solid var(--gold-4);
+  border-radius: 0.75rem;
+  background: var(--tone-1);
+  color: var(--tone-9);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.nav-popover-title {
+  display: block;
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tone-7);
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.theme-option {
+  padding: 0.4rem 0.3rem;
+  border: 1px solid var(--tone-4);
+  border-radius: 0.5rem;
+  background: var(--tone-2);
+  color: var(--tone-9);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.theme-option.is-selected {
+  border-color: var(--gold-6);
+  color: var(--gold-7);
+}
+
+.accent-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.accent-swatch {
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 2px solid var(--tone-4);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.accent-swatch.is-selected {
+  border-color: var(--tone-9);
+  box-shadow: 0 0 0 2px var(--tone-1), 0 0 0 4px var(--gold-6);
+}
+
+.accent-swatch-gold { background: #b7902f; }
+.accent-swatch-violet { background: #8a3cb7; }
+.accent-swatch-emerald { background: #2fb76a; }
+.accent-swatch-crimson { background: #b72f3b; }
+
+/* ---------- Notification bell ---------- */
+.bell-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
+}
+
+.bell-popover {
+  width: min(22rem, 90vw);
+  padding: 0.6rem;
+}
+
+.bell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.bell-mark-all {
+  border: none;
+  background: none;
+  color: var(--gold-7);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.bell-mark-all:disabled {
+  color: var(--tone-6);
+  cursor: default;
+}
+
+.bell-empty {
+  margin: 0.75rem 0;
+  text-align: center;
+  color: var(--tone-7);
+  font-size: 0.85rem;
+}
+
+.bell-list {
+  max-height: 22rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.bell-item {
+  display: flex;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.55rem 0.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--tone-8);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bell-item:hover {
+  background: var(--tone-2);
+}
+
+.bell-item.is-unread {
+  color: var(--tone-9);
+}
+
+.bell-item-dot {
+  flex: 0 0 0.5rem;
+  height: 0.5rem;
+  margin-top: 0.4rem;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.bell-item.is-unread .bell-item-dot {
+  background: var(--gold-6);
+}
+
+.bell-item-fridge_alert.is-unread .bell-item-dot,
+.bell-item-alert_email_failed.is-unread .bell-item-dot,
+.bell-item-low_stock.is-unread .bell-item-dot {
+  background: #d92d20;
+}
+
+.bell-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.bell-item-text strong {
+  font-size: 0.85rem;
+}
+
+.bell-item-text time {
+  font-size: 0.7rem;
+  color: var(--tone-6);
+}
+
+.language-toggle {
+  font-weight: 700;
+}
+
+/* ---------- Report export buttons (CSV + PDF side by side) ---------- */
+.report-export-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin: 0 0 16px auto;
+}
+
+.purchase-receipt-pdf {
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--gold-5);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--gold-7);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.purchase-receipt-pdf:hover {
+  background: color-mix(in srgb, var(--gold-6) 15%, transparent);
+}

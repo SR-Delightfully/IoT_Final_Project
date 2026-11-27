@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { flashToast, useToast } from "../components/Toaster";
+import { useI18n } from "../utils/i18n";
 
 function Login() {
+  const { t } = useI18n();
 const toast = useToast();
 const [formData, setFormData] = useState({
 email: "",
@@ -56,7 +58,10 @@ try {
     localStorage.removeItem("customer_id");
   }
 
-  flashToast("success", `Welcome back${user.user_fname ? `, ${user.user_fname}` : ""}!`);
+  flashToast(
+    "success",
+    user.user_fname ? t("Welcome back, {name}!", { name: user.user_fname }) : t("Welcome back!")
+  );
   window.location.href = user.user_role === "admin" ? "/dashboard/inventory" : "/account";
 } catch (error) {
   setLoading(false);
@@ -66,11 +71,11 @@ try {
 };
 
 return ( <main className="login-page"> <div className="login-card"> <div className="login-card-body"> <h1 className="login-title">
-Login to join the fun </h1>
+{t("Login to join the fun")} </h1>
 
 
       <p className="login-subtitle">
-        <i>Start building your decks now!</i>
+        <i>{t("Start building your decks now!")}</i>
       </p>
 
       <form
@@ -83,8 +88,8 @@ Login to join the fun </h1>
               htmlFor="login-email-input"
               className="form-label"
             >
-              <h2>Email</h2>
-              <h5>Enter the email associated with your account.</h5>
+              <h2>{t("Email")}</h2>
+              <h5>{t("Enter the email associated with your account.")}</h5>
             </label>
 
             <input
@@ -93,7 +98,7 @@ Login to join the fun </h1>
               id="login-email-input"
               value={formData.email}
               onChange={handleChange}
-              placeholder="example@google.ca"
+              placeholder={t("example@google.ca")}
               autoComplete="email"
               required
             />
@@ -104,8 +109,8 @@ Login to join the fun </h1>
               htmlFor="login-password-input"
               className="form-label"
             >
-              <h2>Password</h2>
-              <h5>Enter your account password.</h5>
+              <h2>{t("Password")}</h2>
+              <h5>{t("Enter your account password.")}</h5>
             </label>
 
             <input
@@ -114,7 +119,7 @@ Login to join the fun </h1>
               id="login-password-input"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter password"
+              placeholder={t("Enter password")}
               autoComplete="current-password"
               required
             />
@@ -128,15 +133,15 @@ Login to join the fun </h1>
             id="login-btn"
             value={
               loading
-                ? "Logging In..."
-                : "Start"
+                ? t("Logging In...")
+                : t("Start")
             }
             disabled={loading}
           />
 
           <div className="already-logged-in">
             <a href="/register">
-              Don't have an account?
+              {t("Don't have an account?")}
             </a>
           </div>
         </div>

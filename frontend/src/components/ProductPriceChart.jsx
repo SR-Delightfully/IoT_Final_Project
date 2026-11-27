@@ -11,8 +11,10 @@ import {
     formatDateTime,
     formatPrice,
 } from "../utils/purchases";
+import { useI18n } from "../utils/i18n";
 
 function ProductPriceChart({ history }) {
+  const { t } = useI18n();
     if (history.length === 0) return null;
     // Compare the oldest and newest unit prices paid.
     const firstPrice = history[0].purchase_item_unit_price_cents;
@@ -24,16 +26,16 @@ function ProductPriceChart({ history }) {
 
     return (
         <div>
-            <h3 className="account-section-title">Price History</h3>
+            <h3 className="account-section-title">{t("Price History")}</h3>
             {history.length < 2 ? (
                 <p className="points-next">
-                    One purchase recorded. Price comparison needs at least two purchases.
+                    {t("One purchase recorded. Price comparison needs at least two purchases.")}
                 </p>
             ) : (
                 <p className="points-next">
-                    First price: {formatPrice(firstPrice)}
-                    {" | "}Latest price: {formatPrice(latestPrice)}
-                    {" | "}Change: {priceChange > 0 ? "+" : ""}
+                    {t("First price:")} {formatPrice(firstPrice)}
+                    {" | "}{t("Latest price:")} {formatPrice(latestPrice)}
+                    {" | "}{t("Change:")} {priceChange > 0 ? "+" : ""}
                     {formatPrice(priceChange)}
                     {percentageChange !== null && (
                         <>
@@ -58,7 +60,7 @@ function ProductPriceChart({ history }) {
                     />
                     <Tooltip
                         labelFormatter={formatDateTime}
-                        formatter={(value) => [formatPrice(value), "Unit price"]}
+                        formatter={(value) => [formatPrice(value), t("Unit price")]}
                         contentStyle={{
                             backgroundColor: "#151726",
                             borderColor: "#bca66b",

@@ -1,5 +1,7 @@
+import { useI18n } from "../utils/i18n";
 
 function Fan({ status, onToggle, disabled = false }) {
+  const { t } = useI18n();
   const isOn = String(status ?? "OFF").toUpperCase() === "ON";
 
   return (
@@ -36,7 +38,7 @@ function Fan({ status, onToggle, disabled = false }) {
 
           <span className="fan-state" aria-live="polite">
             <span className="fan-status-dot" />
-            {isOn ? "FAN ACTIVE" : "FAN STANDBY"}
+            {isOn ? t("FAN ACTIVE") : t("FAN STANDBY")}
           </span>
 
 
@@ -48,7 +50,7 @@ function Fan({ status, onToggle, disabled = false }) {
             disabled={disabled}
             aria-pressed={isOn}
           >
-            {isOn ? "POWER OFF" : "POWER ON"}
+            {isOn ? t("POWER OFF") : t("POWER ON")}
           </button>
       </div>
     </div>

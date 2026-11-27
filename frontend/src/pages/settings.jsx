@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useStatusToasts } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
+import { useI18n } from "../utils/i18n";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -30,6 +31,7 @@ const EMPTY_PASSWORDS = {
 };
 
 function Settings() {
+  const { t } = useI18n();
   const loggedIn = Boolean(localStorage.getItem("user_id"));
   const [me, setMe] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -112,14 +114,14 @@ function Settings() {
       <main className="account-page">
         <div className="account-card">
           <div className="account-card-body">
-            <h1 className="account-title">Settings</h1>
+            <h1 className="account-title">{t("Settings")}</h1>
             <p className="account-subtitle">
-              <i>{loadError || "log in to change your settings."}</i>
+              <i>{t(loadError) || t("log in to change your settings.")}</i>
             </p>
           </div>
         </div>
         <div className="account-links">
-          <a href="/login">Log in</a>
+          <a href="/login">{t("Log in")}</a>
         </div>
       </main>
     );
@@ -129,7 +131,7 @@ function Settings() {
     return (
       <main className="account-page">
         <p className="products-message">
-          <i>loading your settings...</i>
+          <i>{t("loading your settings...")}</i>
         </p>
       </main>
     );
@@ -139,17 +141,17 @@ function Settings() {
     <main className="account-page">
       <div className="account-card">
         <div className="account-card-body">
-          <h1 className="account-title">Settings</h1>
+          <h1 className="account-title">{t("Settings")}</h1>
           <p className="account-subtitle">
             <i>{me.user_email}</i>
           </p>
 
           <section className="account-section">
-            <h2 className="account-section-title">Your Details</h2>
+            <h2 className="account-section-title">{t("Your Details")}</h2>
 
             <form className="settings-form" onSubmit={saveProfile}>
               <label>
-                <span className="form-label">First name</span>
+                <span className="form-label">{t("First name")}</span>
                 <input
                   name="first_name"
                   value={profile.first_name}
@@ -158,7 +160,7 @@ function Settings() {
                 />
               </label>
               <label>
-                <span className="form-label">Last name</span>
+                <span className="form-label">{t("Last name")}</span>
                 <input
                   name="last_name"
                   value={profile.last_name}
@@ -170,7 +172,7 @@ function Settings() {
               {me.is_customer && (
                 <>
                   <label>
-                    <span className="form-label">Phone</span>
+                    <span className="form-label">{t("Phone")}</span>
                     <input
                       name="phone"
                       type="tel"
@@ -180,7 +182,7 @@ function Settings() {
                     />
                   </label>
                   <label className="settings-full">
-                    <span className="form-label">Address</span>
+                    <span className="form-label">{t("Address")}</span>
                     <input
                       name="address"
                       value={profile.address}
@@ -192,17 +194,17 @@ function Settings() {
               )}
 
               <div className="dashboard-form-actions">
-                <button type="submit">Save details</button>
+                <button type="submit">{t("Save details")}</button>
               </div>
             </form>
           </section>
 
           <section className="account-section">
-            <h2 className="account-section-title">Change Password</h2>
+            <h2 className="account-section-title">{t("Change Password")}</h2>
 
             <form className="settings-form" onSubmit={savePassword}>
               <label className="settings-full">
-                <span className="form-label">Current password</span>
+                <span className="form-label">{t("Current password")}</span>
                 <input
                   name="current_password"
                   type="password"
@@ -213,7 +215,7 @@ function Settings() {
                 />
               </label>
               <label>
-                <span className="form-label">New password</span>
+                <span className="form-label">{t("New password")}</span>
                 <input
                   name="new_password"
                   type="password"
@@ -225,7 +227,7 @@ function Settings() {
                 />
               </label>
               <label>
-                <span className="form-label">Confirm new password</span>
+                <span className="form-label">{t("Confirm new password")}</span>
                 <input
                   name="confirm_password"
                   type="password"
@@ -238,7 +240,7 @@ function Settings() {
               </label>
 
               <div className="dashboard-form-actions">
-                <button type="submit">Change password</button>
+                <button type="submit">{t("Change password")}</button>
               </div>
             </form>
           </section>

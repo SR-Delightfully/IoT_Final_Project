@@ -84,6 +84,10 @@ ADDED_COLUMNS = {
         ("category_low_threshold", "INTEGER NOT NULL DEFAULT 5"),
         ("category_moderate_threshold", "INTEGER NOT NULL DEFAULT 15"),
     ],
+    "Notifications": [
+        ("notification_link", "TEXT"),
+        ("notification_data", "TEXT"),
+    ],
     "SensorReadings": [
         ("sensor_light_detected", "INTEGER CHECK (sensor_light_detected IN (0, 1))"),
     ],

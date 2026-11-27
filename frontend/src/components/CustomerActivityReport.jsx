@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     Bar,
     BarChart,
@@ -17,6 +17,8 @@ import {
     downloadCustomerActivityCsv,
     fetchCustomerActivity,
 } from "../utils/reports";
+import { downloadCustomerActivityPdf } from "../utils/reportPdfs";
+import { useI18n } from "../utils/i18n";
 
 const TOOLTIP_STYLE = {
     contentStyle: {
@@ -48,10 +50,13 @@ function Stat({ label, value, detail }) {
 }
 
 function CustomerActivityReport() {
+  const { t } = useI18n();
     const [report, setReport] = useState(null);
     const [error, setError] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
+    const pieRef = useRef(null);
+    const barRef = useRef(null);
 
     useEffect(() => {
         fetchCustomerActivity()
@@ -77,21 +82,36 @@ function CustomerActivityReport() {
     const singleDay = report && report.start_date === report.end_date;
     const split = report
         ? [
-              { name: "New", value: report.new_customers },
-              { name: "Returning", value: report.returning_customers },
+              { name: t("New"), value: report.new_customers },
+              { name: t("Returning"), value: report.returning_customers },
           ]
         : [];
 
     return (
         <>
-            <button
-                type="button"
-                className="account-button inventory-export-button"
-                onClick={() => downloadCustomerActivityCsv(report)}
-                disabled={!report || Boolean(error)}
-            >
-                Download Customer CSV
-            </button>
+            <div className="report-export-buttons">
+                <button
+                    type="button"
+                    className="account-button"
+                    onClick={() => downloadCustomerActivityCsv(report)}
+                    disabled={!report || Boolean(error)}
+                >
+                    {t("Download Customer CSV")}
+                </button>
+                <button
+                    type="button"
+                    className="account-button"
+                    onClick={() =>
+                        downloadCustomerActivityPdf(report, {
+                            pieElement: pieRef.current,
+                            barElement: barRef.current,
+                        })
+                    }
+                    disabled={!report || Boolean(error)}
+                >
+                    {t("Download Customer PDF")}
+                </button>
+            </div>
 
             <div className="spending-section">
                 <DateFilters
@@ -106,64 +126,65 @@ function CustomerActivityReport() {
                     onClick={applyFilters}
                     disabled={!report && !error}
                 >
-                    Apply filters
+                    {t("Apply filters")}
                 </button>
             </div>
             <p className="points-next">
-                Pick the same start and end date to see a single day.
+                {t("Pick the same start and end date to see a single day.")}
             </p>
 
             {error || !report ? (
                 <p className="points-next">
-                    {error || "Loading customer activity..."}
+                    {t(error) || t("Loading customer activity...")}
                 </p>
             ) : (
                 <div className="customer-activity-report">
                     <p className="points-next">
                         {singleDay
-                            ? `Activity on ${report.start_date}`
-                            : `Activity from ${report.start_date} to ${report.end_date}`}
+                            ? t("Activity on {0}", { 0: report.start_date })
+                            : t("Activity from {0} to {1}", { 0: report.start_date, 1: report.end_date })}
                     </p>
 
                     <div className="points-summary">
                         <Stat
-                            label="Customers who purchased"
+                            label={t("Customers who purchased")}
                             value={report.total_customers}
-                            detail={`+ ${report.guest_checkouts} guest checkout${report.guest_checkouts === 1 ? "" : "s"}`}
+                            detail={t("+ {0} guest checkout{1}", { 0: report.guest_checkouts, 1: report.guest_checkouts === 1 ? "" : "s" })}
                         />
                         <Stat
-                            label="New customers"
+                            label={t("New customers")}
                             value={report.new_customers}
-                            detail="First purchase in this period"
+                            detail={t("First purchase in this period")}
                         />
                         <Stat
-                            label="Returning customers"
+                            label={t("Returning customers")}
                             value={report.returning_customers}
-                            detail="Also bought before this period"
+                            detail={t("Also bought before this period")}
                         />
                     </div>
 
                     {!singleDay && (
                         <div className="points-summary">
                             <Stat
-                                label="Most crowded day"
+                                label={t("Most crowded day")}
                                 value={formatDay(report.busiest_day)}
-                                detail={`${report.busiest_day?.shoppers ?? 0} shopper(s)`}
+                                detail={t("{0} shopper(s)", { 0: report.busiest_day?.shoppers ?? 0 })}
                             />
                             <Stat
-                                label="Least crowded day"
+                                label={t("Least crowded day")}
                                 value={formatDay(report.quietest_day)}
-                                detail={`${report.quietest_day?.shoppers ?? 0} shopper(s)`}
+                                detail={t("{0} shopper(s)", { 0: report.quietest_day?.shoppers ?? 0 })}
                             />
                         </div>
                     )}
 
                     <div className="customer-activity-charts">
                         <section className="account-section">
-                            <h2 className="account-section-title">New vs Returning</h2>
+                            <h2 className="account-section-title">{t("New vs Returning")}</h2>
                             {report.total_customers === 0 ? (
-                                <p className="points-next">No customer purchases in this period.</p>
+                                <p className="points-next">{t("No customer purchases in this period.")}</p>
                             ) : (
+                                <div ref={pieRef}>
                                 <ResponsiveContainer width="100%" height={240}>
                                     <PieChart>
                                         <Pie
@@ -181,25 +202,28 @@ function CustomerActivityReport() {
                                         <Legend />
                                     </PieChart>
                                 </ResponsiveContainer>
+                                </div>
                             )}
                         </section>
 
                         {!singleDay && (
                             <section className="account-section">
-                                <h2 className="account-section-title">Shoppers per Day</h2>
+                                <h2 className="account-section-title">{t("Shoppers per Day")}</h2>
                                 <p className="points-next">
-                                    Customers plus guest checkouts. Days with no shoppers count.
+                                    {t("Customers plus guest checkouts. Days with no shoppers count.")}
                                 </p>
+                                <div ref={barRef}>
                                 <ResponsiveContainer width="100%" height={260}>
                                     <BarChart data={report.daily} margin={{ right: 20, bottom: 20 }}>
                                         <XAxis dataKey="date" stroke="var(--tone-8)" />
                                         <YAxis allowDecimals={false} stroke="var(--tone-8)" />
                                         <Tooltip {...TOOLTIP_STYLE} />
                                         <Legend />
-                                        <Bar dataKey="customers" name="Customers" stackId="s" fill="var(--gold-6)" />
-                                        <Bar dataKey="guests" name="Guests" stackId="s" fill="var(--blue-7)" />
+                                        <Bar dataKey="customers" name={t("Customers")} stackId="s" fill="var(--gold-6)" />
+                                        <Bar dataKey="guests" name={t("Guests")} stackId="s" fill="var(--blue-7)" />
                                     </BarChart>
                                 </ResponsiveContainer>
+                                </div>
                             </section>
                         )}
                     </div>

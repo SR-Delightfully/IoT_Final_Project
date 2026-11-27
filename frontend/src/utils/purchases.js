@@ -1,4 +1,5 @@
 import { authHeaders } from "./auth";
+import { currentLang, localeFor } from "./i18n";
 
 
 const API = import.meta.env.VITE_API_URL;
@@ -27,8 +28,12 @@ export async function fetchAccount(startDate = "", endDate = "") {
   return data;
 }
 
+// $12.99 in English, 12,99 $ in French
 export function formatPrice(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return new Intl.NumberFormat(localeFor(currentLang()), {
+    style: "currency",
+    currency: "CAD",
+  }).format((cents || 0) / 100);
 }
 
 export function formatDate(timestamp) {

@@ -7,8 +7,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { formatPrice } from "../utils/purchases";
+import { useI18n } from "../utils/i18n";
 
 function SpendingChart({ purchases }) {
+  const { t } = useI18n();
   const dailyTotals = {};
 
   // Add paid purchases together for each day, keeping amounts in cents.
@@ -28,12 +30,12 @@ function SpendingChart({ purchases }) {
     }));
 
   if (data.length === 0) {
-    return <p className="points-next">No spending in this period.</p>;
+    return <p className="points-next">{t("No spending in this period.")}</p>;
   }
 
   return (
     <div>
-      <h3 className="account-section-title">Daily Spending</h3>
+      <h3 className="account-section-title">{t("Daily Spending")}</h3>
 
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data} margin={{ right: 20, bottom: 20 }}>
@@ -44,7 +46,7 @@ function SpendingChart({ purchases }) {
             tickFormatter={formatPrice}
           />
           <Tooltip
-            formatter={(value) => [formatPrice(value), "Spent"]}
+            formatter={(value) => [formatPrice(value), t("Spent")]}
             contentStyle={{
               backgroundColor: "#151726",
               borderColor: "#bca66b",

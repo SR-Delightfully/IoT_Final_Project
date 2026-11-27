@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useI18n } from "../utils/i18n";
 
 function Registration() {
+  const { t } = useI18n();
   // const handleSubmit = async (e) => {
   //   e.preventDefault();
 
@@ -18,19 +20,19 @@ function Registration() {
       <div className="home-card">
         <div className="home-card-body">
           <h1 className="home-title">
-            Our Community
+            {t("Our Community")}
           </h1>
 
           <p className="home-subtitle">
-           <i> share us with your friends to get 10% off your first purchase!</i>
+           <i> {t("share us with your friends to get 10% off your first purchase!")}</i>
           </p>
 
           <div className="customer-list">
             <div className="customer-card">
               <div id="customer-pfp" /> {/* to be changed for an img tag later */}
-              <h3 className="customer-name">John Doe</h3>
+              <h3 className="customer-name">{t("John Doe")}</h3>
               <span className="customer-doc">
-                <h4 className="doc-title">Date Joined:</h4>
+                <h4 className="doc-title">{t("Date Joined:")}</h4>
                 <p className="date">2026-09-23</p> 
               </span>
             </div>

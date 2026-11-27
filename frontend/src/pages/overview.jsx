@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { authHeaders } from "../utils/auth";
 import { formatPrice } from "../utils/purchases";
+import { useI18n } from "../utils/i18n";
 
 const API = import.meta.env.VITE_API_URL;
 const REFRESH_MS = 5000;
@@ -37,17 +38,19 @@ function isLowStock(p) {
 }
 
 function Tile({ to, label, value, detail, status = "" }) {
+  const { t } = useI18n();
   return (
     <Link to={to} className={`overview-tile ${status}`}>
       <span className="overview-tile-label">{label}</span>
       <strong className="overview-tile-value">{value}</strong>
       <span className="overview-tile-detail">{detail}</span>
-      <span className="overview-tile-link">Open →</span>
+      <span className="overview-tile-link">{t("Open →")}</span>
     </Link>
   );
 }
 
 function Overview() {
+  const { t } = useI18n();
   const [data, setData] = useState(null);
   const [denied, setDenied] = useState(!localStorage.getItem("token"));
   const [error, setError] = useState("");
@@ -94,8 +97,8 @@ function Overview() {
       <main className="products-page">
         <div className="products-card">
           <div className="products-card-body">
-            <h1 className="products-title">Access Denied</h1>
-            <p className="products-message">Only admins can view the dashboard overview.</p>
+            <h1 className="products-title">{t("Access Denied")}</h1>
+            <p className="products-message">{t("Only admins can view the dashboard overview.")}</p>
           </div>
         </div>
       </main>
@@ -105,7 +108,7 @@ function Overview() {
   if (!data) {
     return (
       <main className="overview-page">
-        <p className="points-next">Loading overview...</p>
+        <p className="points-next">{t("Loading overview...")}</p>
       </main>
     );
   }
@@ -123,94 +126,98 @@ function Overview() {
   let lightText = "—";
   if (sensor?.sensor_light != null) lightText = `${Math.round(sensor.sensor_light)} lx`;
   else if (sensor?.sensor_light_detected != null)
-    lightText = sensor.sensor_light_detected === 1 ? "Light" : "Dark";
+    lightText = sensor.sensor_light_detected === 1 ? t("Light") : t("Dark");
 
   return (
     <main className="overview-page">
       <header className="overview-header">
         <div>
-          <span className="overview-eyebrow">SMART TCG STORE / CONTROL ROOM</span>
-          <h1>Dashboard overview</h1>
-          <p>Today at a glance. Each tile opens its full page.</p>
+          <span className="overview-eyebrow">{t("SMART TCG STORE / CONTROL ROOM")}</span>
+          <h1>{t("Dashboard overview")}</h1>
+          <p>{t("Today at a glance. Each tile opens its full page.")}</p>
         </div>
         <span className="overview-updated">
-          {updated && `Updated ${updated.toLocaleTimeString()}`}
-          {error && ` · ${error}`}
+          {updated && t("Updated {0}", { 0: updated.toLocaleTimeString() })}
+          {error && ` · ${t(error)}`}
         </span>
       </header>
 
-      <h2 className="overview-section-title">Store</h2>
+      <h2 className="overview-section-title">{t("Store")}</h2>
       <section className="overview-grid">
         <Tile
           to="/dashboard/reports"
-          label="Sales today"
+          label={t("Sales today")}
           value={sales ? formatPrice(sales.total_sales_cents) : "—"}
-          detail={sales ? `${sales.total_units_sold} unit(s) sold` : "Unavailable"}
+          detail={sales ? t("{0} unit(s) sold", { 0: sales.total_units_sold }) : t("Unavailable")}
         />
         <Tile
           to="/dashboard/reports"
-          label="Customers today"
+          label={t("Customers today")}
           value={customers ? customers.total_customers + customers.guest_checkouts : "—"}
           detail={
             customers
-              ? `${customers.new_customers} new · ${customers.returning_customers} returning · ${customers.guest_checkouts} guest`
-              : "Unavailable"
+              ? t("{0} new · {1} returning · {2} guest", {
+                  0: customers.new_customers,
+                  1: customers.returning_customers,
+                  2: customers.guest_checkouts,
+                })
+              : t("Unavailable")
           }
         />
         <Tile
           to="/dashboard/inventory"
-          label="Low stock"
+          label={t("Low stock")}
           value={products ? lowStock.length : "—"}
           detail={
             products
               ? lowStock.length
                 ? lowStock.slice(0, 3).map((p) => p.product_name).join(", ") +
                   (lowStock.length > 3 ? "…" : "")
-                : "All products above their low level"
-              : "Unavailable"
+                : t("All products above their low level")
+              : t("Unavailable")
           }
           status={lowStock.length ? "is-warning" : ""}
         />
       </section>
 
-      <h2 className="overview-section-title">Equipment</h2>
+      <h2 className="overview-section-title">{t("Equipment")}</h2>
       <section className="overview-grid">
         <Tile
           to="/dashboard/fridges"
-          label="Active fridge alerts"
+          label={t("Active fridge alerts")}
           value={alerts ? unacknowledged.length : "—"}
           detail={
             alerts
-              ? `${activeAlerts.length - unacknowledged.length} acknowledged, not yet resolved`
-              : "Unavailable"
+              ? t("{0} acknowledged, not yet resolved", { 0: activeAlerts.length - unacknowledged.length })
+              : t("Unavailable")
           }
           status={unacknowledged.length ? "is-warning" : ""}
         />
         <Tile
           to="/dashboard/fridges"
-          label="Fans running"
+          label={t("Fans running")}
           value={fridges ? `${fansOn.length}/${fridges.length}` : "—"}
           detail={
             fansOn.length
               ? fansOn.map((f) => f.fridge_name).join(", ")
-              : "All fans off"
+              : t("All fans off")
           }
           status={fansOn.length ? "is-active" : ""}
         />
         <Tile
           to="/dashboard/fridges"
-          label="MSP01 sensor"
+          label={t("MSP01 sensor")}
           value={
             sensor
               ? sensor.sensor_motion === 1
-                ? "Motion"
-                : "No motion"
+                ? t("Motion")
+                : t("No motion")
               : "—"
           }
           detail={
             sensor
-              ? `Light ${lightText} · ${sensorOnline ? "online" : "offline"}`
-              : "No motion/light data yet"
+              ? t("Light {0} · {1}", { 0: lightText, 1: sensorOnline ? t("online") : t("offline") })
+              : t("No motion/light data yet")
           }
           status={sensor?.sensor_motion === 1 ? "is-active" : ""}
         />

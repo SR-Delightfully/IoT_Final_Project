@@ -1,6 +1,7 @@
 import time
 
 from models.database import get_connection
+from models.management_models.model_notifications import notify, notify_admins
 # Testing only: allow RFID tags to be reused across purchases.
 RFID_TEST_MODE = True
 
@@ -543,6 +544,29 @@ class SelfCheckout:
                     (purchase_id, item["product_id"], quantity, item["product_price_cents"])
                 ).lastrowid
                 purchase_items[item["product_id"]] = purchase_item_id
+
+                # Tell admins when this sale takes a product to its category's low level.
+                low_level = conn.execute(
+                    """
+                    SELECT COALESCE(c.category_low_threshold, 5)
+                    FROM Products p
+                    LEFT JOIN Categories c ON c.category_id = p.category_id
+                    WHERE p.product_id = ?
+                    """,
+                    (item["product_id"],)
+                ).fetchone()[0]
+                stock_before = item["product_stock_quantity"]
+                stock_after = stock_before - quantity
+                if stock_before > low_level >= stock_after:
+                    notify_admins(
+                        conn,
+                        "low_stock",
+                        f"Low stock: {item['product_name']}",
+                        f"{item['product_name']} is down to {stock_after} in stock.",
+                        link="/dashboard/inventory",
+                        data={"product": item["product_name"], "quantity": stock_after},
+                    )
+
                 conn.execute(
                     """
                     UPDATE Products
@@ -610,6 +634,22 @@ class SelfCheckout:
                 "INSERT INTO Receipts (purchase_id, receipt_number) VALUES (?, ?)",
                 (purchase_id, receipt_number)
             ).lastrowid
+
+            # Purchase confirmation in the customer's notification bell.
+            if session["user_id"] is not None:
+                notify(
+                    conn,
+                    session["user_id"],
+                    "purchase",
+                    "Purchase confirmed",
+                    f"Receipt {receipt_number}: ${total / 100:.2f}, {points_earned} point(s) earned.",
+                    link="/customer/purchases",
+                    data={
+                        "receipt": receipt_number,
+                        "total": round(total / 100, 2),
+                        "points": points_earned,
+                    },
+                )
             conn.execute(
                 """
                 UPDATE SelfCheckoutSessions

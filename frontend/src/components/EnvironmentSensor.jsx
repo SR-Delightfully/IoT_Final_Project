@@ -1,3 +1,5 @@
+import { useI18n } from "../utils/i18n";
+import { timeAgo as shortTimeAgo } from "../utils/notifications";
 // Widgets for the Minew MSP01 BLE sensor (temperature, humidity, light, motion).
 // The ESP32 relays it over MQTT as fridge/<id>/..., so its values arrive on the
 // fridge it is assigned to; this panel shows the extra sensor data on its own.
@@ -11,16 +13,6 @@ function parseDbTime(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function timeAgo(date) {
-  if (!date) return "never";
-  const seconds = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return date.toLocaleString();
-}
 
 function lightLabel(lux) {
   if (lux == null) return "";
@@ -41,6 +33,8 @@ function SensorTile({ label, value, detail, status = "" }) {
 }
 
 function SensorCard({ fridge }) {
+  const { t, locale } = useI18n();
+  const timeAgo = (date) => (date ? shortTimeAgo(date, t, locale) : t("never"));
   const sensor = fridge.sensor;
   const lastSeen = parseDbTime(sensor.sensor_last_seen);
   const online = lastSeen && Date.now() - lastSeen.getTime() < OFFLINE_AFTER_MS;
@@ -49,42 +43,42 @@ function SensorCard({ fridge }) {
   const battery = sensor.sensor_battery;
 
   let lightValue = "—";
-  let lightDetail = "No light frame received";
+  let lightDetail = t("No light frame received");
   if (sensor.sensor_light != null) {
     lightValue = `${Math.round(sensor.sensor_light)} lx`;
-    lightDetail = lightLabel(sensor.sensor_light);
+    lightDetail = t(lightLabel(sensor.sensor_light));
   } else if (sensor.sensor_light_detected != null) {
-    lightValue = sensor.sensor_light_detected === 1 ? "Light" : "Dark";
-    lightDetail = "Light on / off sensor";
+    lightValue = sensor.sensor_light_detected === 1 ? t("Light") : t("Dark");
+    lightDetail = t("Light on / off sensor");
   }
 
   return (
     <div className="sensor-card">
       <header className="sensor-card-header">
         <div>
-          <h3>MSP01 · {fridge.fridge_name}</h3>
+          <h3>{t("MSP01 ·")} {fridge.fridge_name}</h3>
           <span className="sensor-card-location">
-            {fridge.fridge_location || "Location unassigned"}
+            {fridge.fridge_location || t("Location unassigned")}
           </span>
         </div>
         <span className={`sensor-status ${online ? "is-online" : "is-offline"}`}>
           <span className="device-status-dot" />
-          {online ? "ONLINE" : "OFFLINE"} · {timeAgo(lastSeen)}
+          {online ? t("ONLINE") : t("OFFLINE")} · {timeAgo(lastSeen)}
         </span>
       </header>
 
       <div className="sensor-tiles">
         <SensorTile
-          label="Motion"
-          value={sensor.sensor_motion == null ? "—" : motionNow ? "Detected" : "None"}
-          detail={`Last motion: ${timeAgo(lastMotion)}`}
+          label={t("Motion")}
+          value={sensor.sensor_motion == null ? "—" : motionNow ? t("Detected") : t("None")}
+          detail={t("Last motion: {0}", { 0: timeAgo(lastMotion) })}
           status={motionNow ? "is-alert" : ""}
         />
-        <SensorTile label="Light" value={lightValue} detail={lightDetail} />
+        <SensorTile label={t("Light")} value={lightValue} detail={lightDetail} />
         <SensorTile
-          label="Temperature"
+          label={t("Temperature")}
           value={fridge.reading_temperature == null ? "—" : `${Number(fridge.reading_temperature).toFixed(1)}°C`}
-          detail={`Max ${fridge.fridge_max_temperature}°C`}
+          detail={t("Max {0}°C", { 0: fridge.fridge_max_temperature })}
           status={
             fridge.reading_temperature != null &&
             fridge.reading_temperature > fridge.fridge_max_temperature
@@ -93,12 +87,12 @@ function SensorCard({ fridge }) {
           }
         />
         <SensorTile
-          label="Humidity"
+          label={t("Humidity")}
           value={fridge.reading_humidity == null ? "—" : `${Math.round(fridge.reading_humidity)}%`}
-          detail={`${fridge.fridge_min_humidity}–${fridge.fridge_max_humidity}% range`}
+          detail={t("{0}–{1}% range", { 0: fridge.fridge_min_humidity, 1: fridge.fridge_max_humidity })}
         />
         <SensorTile
-          label="Battery"
+          label={t("Battery")}
           value={battery == null ? "—" : `${battery}%`}
           detail={
             battery == null ? "" : (
@@ -118,19 +112,19 @@ function SensorCard({ fridge }) {
 }
 
 function EnvironmentSensor({ fridges }) {
+  const { t } = useI18n();
   const withSensor = fridges.filter((fridge) => fridge.sensor);
 
   return (
     <div className="environment-sensor" id="environment-sensor">
       <header className="environment-sensor-header">
-        <span className="dashboard-eyebrow">BLE SENSOR · MINEW MSP01</span>
-        <span className="dashboard-count">{withSensor.length} REPORTING</span>
+        <span className="dashboard-eyebrow">{t("BLE SENSOR · MINEW MSP01")}</span>
+        <span className="dashboard-count">{withSensor.length} {t("REPORTING")}</span>
       </header>
 
       {withSensor.length === 0 ? (
         <p className="dashboard-empty">
-          No motion or light data yet. Check that the BLE ESP32 is running and that
-          the MSP01 is set to broadcast its light and PIR frames in Minew BeaconSET.
+          {t("No motion or light data yet. Check that the BLE ESP32 is running and that the MSP01 is set to broadcast its light and PIR frames in Minew BeaconSET.")}
         </p>
       ) : (
         withSensor.map((fridge) => <SensorCard key={fridge.fridge_id} fridge={fridge} />)

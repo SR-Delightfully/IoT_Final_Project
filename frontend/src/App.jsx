@@ -12,6 +12,7 @@ import "./assets/css/06_Checkout_Styles.css";
 import "./assets/css/07_Products_Styles.css";
 import "./assets/css/08_Toast_Styles.css";
 import "./assets/css/99_Testing_Styles.css";
+import "./assets/css/09_Theme_Styles.css";
 
 // PAGE IMPORTS:
 import Account from "./pages/account";
@@ -32,6 +33,8 @@ import Overview from "./pages/overview";
 // COMPONENTS:
 import NavBar from "./layout/navbar";
 import { ToastProvider } from "./components/Toaster";
+import { LanguageProvider } from "./utils/i18n";
+import { useTheme } from "./utils/theme";
 import ScannerSimulator from "./components/ScannerSimulator";
 
 const SHOW_SCANNER_SIMULATOR = import.meta.env.VITE_SCANNER_SIMULATOR !== "false";
@@ -46,9 +49,12 @@ function AppContent() {
     "/self-checkout",
   ].includes(location.pathname);
 
+  // The self-checkout kiosk always keeps its dark look.
+  const [themePrefs, setThemePrefs] = useTheme(location.pathname === "/self-checkout");
+
   return (
     <ToastProvider>
-      {!hideNavBar && <NavBar />}
+      {!hideNavBar && <NavBar themePrefs={themePrefs} onThemeChange={setThemePrefs} />}
 
       <Routes>
         <Route path="/" element={<Home />} />
@@ -82,9 +88,11 @@ function AppContent() {
 
 function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <LanguageProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </LanguageProvider>
   );
 }
 

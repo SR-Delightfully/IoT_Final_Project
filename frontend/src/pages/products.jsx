@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { formatPrice as formatLocalPrice } from "../utils/purchases";
+import { useI18n } from "../utils/i18n";
 
 function formatPrice(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return formatLocalPrice(cents);
 }
 
 // product photo, or the first letter of the name if there is no photo
@@ -29,6 +31,7 @@ function ProductImage({ product, className = "" }) {
 }
 
 function Products() {
+  const { t } = useI18n();
   const [products, setProducts] = useState(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -83,16 +86,16 @@ function Products() {
     <main className="products-page">
       <div className="products-card">
         <div className="products-card-body">
-          <h1 className="products-title">Our Products</h1>
+          <h1 className="products-title">{t("Our Products")}</h1>
 
           <p className="products-subtitle">
-            <i>browse everything we have in store.</i>
+            <i>{t("browse everything we have in store.")}</i>
           </p>
 
-          {error && <p className="products-message">{error}</p>}
+          {error && <p className="products-message">{t(error)}</p>}
           {!error && !products && (
             <p className="products-message">
-              <i>loading products...</i>
+              <i>{t("loading products...")}</i>
             </p>
           )}
 
@@ -101,12 +104,12 @@ function Products() {
               <div className="products-filters">
                 <input
                   type="search"
-                  placeholder="Search by name or producer"
+                  placeholder={t("Search by name or producer")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
                 <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                  <option value="all">All categories</option>
+                  <option value="all">{t("All categories")}</option>
                   {categories.map((c) => (
                     <option key={c} value={c}>
                       {c}
@@ -114,10 +117,10 @@ function Products() {
                   ))}
                 </select>
                 <select value={sort} onChange={(e) => setSort(e.target.value)}>
-                  <option value="name">Name (A-Z)</option>
-                  <option value="price-asc">Price: low to high</option>
-                  <option value="price-desc">Price: high to low</option>
-                  <option value="stock">Most in stock</option>
+                  <option value="name">{t("Name (A-Z)")}</option>
+                  <option value="price-asc">{t("Price: low to high")}</option>
+                  <option value="price-desc">{t("Price: high to low")}</option>
+                  <option value="stock">{t("Most in stock")}</option>
                 </select>
                 <label className="products-checkbox">
                   <input
@@ -125,16 +128,16 @@ function Products() {
                     checked={inStockOnly}
                     onChange={(e) => setInStockOnly(e.target.checked)}
                   />
-                  In stock only
+                  {t("In stock only")}
                 </label>
               </div>
 
               <p className="products-count">
-                Showing {visible.length} of {products.length} products
+                {t("Showing")} {visible.length} {t("of")} {products.length} {t("products")}
               </p>
 
               {visible.length === 0 ? (
-                <p className="products-message">No products found.</p>
+                <p className="products-message">{t("No products found.")}</p>
               ) : (
                 <div className="products-grid">
                   {visible.map((p) => {
@@ -159,7 +162,7 @@ function Products() {
                           <span
                             className={`product-stock ${inStock ? "" : "product-stock-out"}`}
                           >
-                            {inStock ? `${p.quantity_in_stock} in stock` : "Out of stock"}
+                            {inStock ? t("{0} in stock", { 0: p.quantity_in_stock }) : t("Out of stock")}
                           </span>
                         </div>
                       </article>
@@ -172,7 +175,7 @@ function Products() {
         </div>
       </div>
       <div className="products-links">
-        <a href="/home">Back to home</a>
+        <a href="/home">{t("Back to home")}</a>
       </div>
 
       {selected && (
@@ -187,7 +190,7 @@ function Products() {
             <button
               type="button"
               className="product-modal-close"
-              aria-label="Close"
+              aria-label={t("Close")}
               onClick={() => setSelected(null)}
             >
               ×
@@ -203,15 +206,15 @@ function Products() {
               </span>
 
               <dl className="product-modal-details">
-                <dt>Producer</dt>
+                <dt>{t("Producer")}</dt>
                 <dd>{selected.product_producer_company}</dd>
-                <dt>Availability</dt>
+                <dt>{t("Availability")}</dt>
                 <dd className={selected.quantity_in_stock > 0 ? "" : "product-stock-out"}>
                   {selected.quantity_in_stock > 0
-                    ? `${selected.quantity_in_stock} in stock`
-                    : "Out of stock"}
+                    ? t("{0} in stock", { 0: selected.quantity_in_stock })
+                    : t("Out of stock")}
                 </dd>
-                <dt>UPC</dt>
+                <dt>{t("UPC")}</dt>
                 <dd className="dashboard-subtext">{selected.product_upc}</dd>
               </dl>
             </div>

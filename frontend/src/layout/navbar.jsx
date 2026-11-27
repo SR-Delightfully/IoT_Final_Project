@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { authHeaders, SESSION_KEYS } from "../utils/auth";
 import { flashToast } from "../components/Toaster";
+import NotificationBell from "../components/NotificationBell";
+import ThemeMenu from "../components/ThemeMenu";
+import { useI18n } from "../utils/i18n";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -18,7 +21,8 @@ function readUser() {
     };
 }
 
-function NavBar() {
+function NavBar({ themePrefs, onThemeChange }) {
+    const { t, lang, setLang } = useI18n();
     const [user, setUser] = useState(readUser);
     const [accountOpen, setAccountOpen] = useState(false);
     const { pathname } = useLocation();
@@ -31,7 +35,7 @@ function NavBar() {
         fetch(`${API}/me`, { headers: authHeaders() })
             .then(async (res) => {
                 if (res.status === 401) {
-                    logOut("Your session expired. Please log in again.");
+                    logOut(t("Your session expired. Please log in again."));
                     return;
                 }
 
@@ -69,7 +73,7 @@ function NavBar() {
         };
     }, []);
 
-    function logOut(message = "You have been logged out.") {
+    function logOut(message = t("You have been logged out.")) {
         SESSION_KEYS.forEach((key) => localStorage.removeItem(key));
         flashToast("info", message);
         setUser(null);
@@ -108,9 +112,23 @@ function NavBar() {
                 </a>
 
                 <div className="nav-links">
-                    {link("/home", "Home")}
-                    {link("/products", "Browse")}
-                    {link("/self-checkout", "Shop")}
+                    {link("/home", t("Home"))}
+                    {link("/products", t("Browse"))}
+                    {link("/self-checkout", t("Shop"))}
+                </div>
+
+                <div className="nav-tools">
+                    <button
+                        type="button"
+                        className="nav-tool-button language-toggle"
+                        onClick={() => setLang(lang === "en" ? "fr" : "en")}
+                        aria-label={lang === "en" ? "Passer au français" : "Switch to English"}
+                        title={lang === "en" ? "Français" : "English"}
+                    >
+                        {lang === "en" ? "FR" : "EN"}
+                    </button>
+                    <ThemeMenu prefs={themePrefs} onChange={onThemeChange} t={t} />
+                    {user && <NotificationBell />}
                 </div>
 
                 <div className="nav-user">
@@ -123,18 +141,18 @@ function NavBar() {
                                 aria-expanded={accountOpen}
                                 aria-haspopup="true"
                             >
-                                Welcome back, {firstName} {lastName}!
+                                {t("Welcome back, {name}!", { name: `${firstName} ${lastName}`.trim() })}
                                 <span className="nav-dropdown-arrow" />
                             </button>
 
                             {accountOpen && (
                                 <div className="nav-dropdown-menu">
-                                    {link("/customer", "My Account")}
+                                    {link("/customer", t("My Account"))}
 
                                     {user.user_role === "customer" &&
-                                        link("/customer/purchases", "My Purchases")}
+                                        link("/customer/purchases", t("My Purchases"))}
 
-                                    {link("/customer/settings", "Settings")}
+                                    {link("/customer/settings", t("Settings"))}
 
                                     <div className="nav-dropdown-divider" />
 
@@ -143,15 +161,15 @@ function NavBar() {
                                         className="nav-dropdown-logout"
                                         onClick={() => logOut()}
                                     >
-                                        Log Out
+                                        {t("Log Out")}
                                     </button>
                                 </div>
                             )}
                         </div>
                     ) : (
                         <>
-                            {link("/login", "Log in")}
-                            {link("/register", "Register")}
+                            {link("/login", t("Log in"))}
+                            {link("/register", t("Register"))}
                         </>
                     )}
                 </div>
@@ -160,15 +178,15 @@ function NavBar() {
             {isemployee && (
                 <nav className="nav-bar nav-secondary">
                     <span className="nav-label">
-                        {isAdmin ? "Admin Mode" : "Employee Mode"}
+                        {isAdmin ? t("Admin Mode") : t("Employee Mode")}
                     </span>
 
                     <div className="nav-links">
-                        {link("/dashboard", "Overview")}
-                        {link("/dashboard/inventory", "Inventory")}
-                        {isAdmin && link("/dashboard/reports", "Reports")}
-                        {link("/dashboard/fridges", "Fridges")}
-                        {isAdmin && link("/dashboard/users", "Users")}
+                        {link("/dashboard", t("Overview"))}
+                        {link("/dashboard/inventory", t("Inventory"))}
+                        {isAdmin && link("/dashboard/reports", t("Reports"))}
+                        {link("/dashboard/fridges", t("Fridges"))}
+                        {isAdmin && link("/dashboard/users", t("Users"))}
                     </div>
                 </nav>
             )}

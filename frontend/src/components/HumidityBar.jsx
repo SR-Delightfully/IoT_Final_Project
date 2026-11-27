@@ -1,5 +1,7 @@
+import { useI18n } from "../utils/i18n";
 
 function HumidityBar({ value }) {
+  const { t } = useI18n();
   const percentage =
     value == null ? 0 : Math.max(0, Math.min(100, value));
 
@@ -8,7 +10,7 @@ function HumidityBar({ value }) {
       <div
         className="humidity-track"
         role="progressbar"
-        aria-label="Humidity"
+        aria-label={t("Humidity")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={value ?? undefined}

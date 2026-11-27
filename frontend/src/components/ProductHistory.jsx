@@ -6,8 +6,10 @@ import {
   formatPrice,
 } from "../utils/purchases";
 import ProductPriceChart from "./ProductPriceChart";
+import { useI18n } from "../utils/i18n";
 
 function ProductHistory() {
+  const { t } = useI18n();
   const [purchases, setPurchases] = useState(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -53,29 +55,29 @@ function ProductHistory() {
 
   return (
     <section className="account-section product-history-section">
-      <h2 className="account-section-title">Product Purchase History</h2>
+      <h2 className="account-section-title">{t("Product Purchase History")}</h2>
 
       {error || !purchases ? (
         <p className="points-next">
-          {error || "Loading purchased products..."}
+          {t(error) || t("Loading purchased products...")}
         </p>
       ) : (
         <>
           <div className="form-field">
             <label htmlFor="product-history-search">
-              Search a purchased product
+              {t("Search a purchased product")}
             </label>
             <input
               id="product-history-search"
               type="search"
-              placeholder="Enter a product name"
+              placeholder={t("Enter a product name")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
 
           {matchingProducts.length === 0 ? (
-            <p className="points-next">No matching purchased products.</p>
+            <p className="points-next">{t("No matching purchased products.")}</p>
           ) : (
             <ul className="purchase-items">
               {matchingProducts.map((product) => (
@@ -96,36 +98,36 @@ function ProductHistory() {
       )}
 
       {reportLoading && (
-        <p className="points-next">Loading product history...</p>
+        <p className="points-next">{t("Loading product history...")}</p>
       )}
 
       {reportError && (
-        <p className="points-next">{reportError}</p>
+        <p className="points-next">{t(reportError)}</p>
       )}
 
       {report && (
         <div>
           <h3 className="account-section-title">
-            {report.history[0]?.product_name || "Product History"}
+            {report.history[0]?.product_name || t("Product History")}
           </h3>
 
           <p className="points-next">
-            Purchased in {report.purchase_count} separate purchases.
-            {" "}Total units: {report.total_quantity}.
+            {t("Purchased in")} {report.purchase_count} {t("separate purchases.")}
+            {" "}{t("Total units:")} {report.total_quantity}.
           </p>
 
           {report.history.length === 0 ? (
-            <p className="points-next">No purchases found for this product.</p>
+            <p className="points-next">{t("No purchases found for this product.")}</p>
           ) : (
             <ul className="purchase-items">
               {report.history.map((item, index) => (
                 <li key={index}>
                   <span>
                     {formatDateTime(item.purchase_created_at)}
-                    {" — "}Qty: {item.purchase_item_quantity}
+                    {" — "}{t("Qty:")} {item.purchase_item_quantity}
                   </span>
                   <span>
-                    {formatPrice(item.purchase_item_unit_price_cents)} each
+                    {formatPrice(item.purchase_item_unit_price_cents)} {t("each")}
                   </span>
                 </li>
               ))}

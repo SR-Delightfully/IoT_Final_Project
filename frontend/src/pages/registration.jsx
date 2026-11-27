@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useStatusToasts } from "../components/Toaster";
+import { useI18n } from "../utils/i18n";
 
 function Registration() {
+  const { t } = useI18n();
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -134,12 +136,12 @@ function Registration() {
       <div className="registration-card">
         <div className="registration-card-body">
           <h1 className="registration-title">
-            Register an Account
+            {t("Register an Account")}
           </h1>
 
           <p className="registration-subtitle">
             <i>
-              Join today to better equip yourself for your journey.
+              {t("Join today to better equip yourself for your journey.")}
             </i>
           </p>
 
@@ -153,8 +155,8 @@ function Registration() {
                   htmlFor="fname-input"
                   className="form-label"
                 >
-                  <h2>First Name</h2>
-                  <h5>What is your given name?</h5>
+                  <h2>{t("First Name")}</h2>
+                  <h5>{t("What is your given name?")}</h5>
                 </label>
 
                 <input
@@ -163,7 +165,7 @@ function Registration() {
                   id="fname-input"
                   value={formData.first_name}
                   onChange={handleChange}
-                  placeholder="Ex. John, Jane, Jordan"
+                  placeholder={t("Ex. John, Jane, Jordan")}
                   required
                 />
               </div>
@@ -173,8 +175,8 @@ function Registration() {
                   htmlFor="lname-input"
                   className="form-label"
                 >
-                  <h2>Last Name</h2>
-                  <h5>What is your family name?</h5>
+                  <h2>{t("Last Name")}</h2>
+                  <h5>{t("What is your family name?")}</h5>
                 </label>
 
                 <input
@@ -183,7 +185,7 @@ function Registration() {
                   id="lname-input"
                   value={formData.last_name}
                   onChange={handleChange}
-                  placeholder="Ex. Doe, Dixon, Davis"
+                  placeholder={t("Ex. Doe, Dixon, Davis")}
                   required
                 />
               </div>
@@ -193,8 +195,8 @@ function Registration() {
                   htmlFor="email-input"
                   className="form-label"
                 >
-                  <h2>Email</h2>
-                  <h5>What is your personal email address?</h5>
+                  <h2>{t("Email")}</h2>
+                  <h5>{t("What is your personal email address?")}</h5>
                 </label>
 
                 <input
@@ -203,7 +205,7 @@ function Registration() {
                   id="email-input"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="example@google.ca"
+                  placeholder={t("example@google.ca")}
                   required
                 />
               </div>
@@ -213,8 +215,8 @@ function Registration() {
                   htmlFor="phone-input"
                   className="form-label"
                 >
-                  <h2>Phone</h2>
-                  <h5>Please enter your personal phone number.</h5>
+                  <h2>{t("Phone")}</h2>
+                  <h5>{t("Please enter your personal phone number.")}</h5>
                 </label>
 
                 <input
@@ -223,7 +225,7 @@ function Registration() {
                   id="phone-input"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="XXX-XXX-XXXX"
+                  placeholder={t("XXX-XXX-XXXX")}
                   required
                 />
               </div>
@@ -233,8 +235,8 @@ function Registration() {
                   htmlFor="addr-input"
                   className="form-label"
                 >
-                  <h2>Address</h2>
-                  <h5>What is your home address?</h5>
+                  <h2>{t("Address")}</h2>
+                  <h5>{t("What is your home address?")}</h5>
                 </label>
 
                 <input
@@ -243,7 +245,7 @@ function Registration() {
                   id="addr-input"
                   value={formData.address}
                   onChange={handleChange}
-                  placeholder="Enter your home address"
+                  placeholder={t("Enter your home address")}
                   required
                 />
               </div>
@@ -253,8 +255,8 @@ function Registration() {
                   htmlFor="password-input"
                   className="form-label"
                 >
-                  <h2>Password</h2>
-                  <h5>At least 8 characters.</h5>
+                  <h2>{t("Password")}</h2>
+                  <h5>{t("At least 8 characters.")}</h5>
                 </label>
 
                 <input
@@ -263,7 +265,7 @@ function Registration() {
                   id="password-input"
                   value={formData.password}
                   onChange={handleChange}
-                  placeholder="Enter password"
+                  placeholder={t("Enter password")}
                   autoComplete="new-password"
                   minLength={8}
                   required
@@ -275,8 +277,8 @@ function Registration() {
                   htmlFor="confirm-password-input"
                   className="form-label"
                 >
-                  <h2>Confirm Password</h2>
-                  <h5>Enter it again to confirm.</h5>
+                  <h2>{t("Confirm Password")}</h2>
+                  <h5>{t("Enter it again to confirm.")}</h5>
                 </label>
 
                 <input
@@ -285,7 +287,7 @@ function Registration() {
                   id="confirm-password-input"
                   value={formData.confirm_password}
                   onChange={handleChange}
-                  placeholder="Confirm password"
+                  placeholder={t("Confirm password")}
                   autoComplete="new-password"
                   minLength={8}
                   required
@@ -305,7 +307,7 @@ function Registration() {
                 />
 
                 <p>
-                  I agree to the Terms of Service
+                  {t("I agree to the Terms of Service")}
                 </p>
               </span>
 
@@ -315,8 +317,8 @@ function Registration() {
                 id="register-btn"
                 value={
                   status.loading
-                    ? "Creating Account..."
-                    : "Sign Up"
+                    ? t("Creating Account...")
+                    : t("Sign Up")
                 }
                 disabled={status.loading}
               />
@@ -324,7 +326,7 @@ function Registration() {
 
             <div className="already-registered">
               <a href="/login">
-                Already have an account?
+                {t("Already have an account?")}
               </a>
             </div>
           </form>

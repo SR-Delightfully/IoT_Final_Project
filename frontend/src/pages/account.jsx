@@ -7,6 +7,7 @@ import {
 } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
 import MembershipCard from "../components/MembershipCard";
+import { useI18n } from "../utils/i18n";
 
 
 const TIERS = [
@@ -35,6 +36,7 @@ function getTierInfo(points) {
 }
 
 function Account() {
+  const { t } = useI18n();
   const [account, setAccount] = useState(null);
   const [error, setError] = useState("");
   // Store the dates selected for the spending report.
@@ -92,9 +94,9 @@ function Account() {
       <main className="account-page">
         <div className="account-card">
           <div className="account-card-body">
-            <h1 className="account-title">Your Account</h1>
+            <h1 className="account-title">{t("Your Account")}</h1>
             <p className="account-subtitle">
-              <i>{error || "loading your account..."}</i>
+              <i>{t(error) || t("loading your account...")}</i>
             </p>
           </div>
         </div>
@@ -117,18 +119,18 @@ function Account() {
             href="/settings"
             className="account-button account-settings-button"
           >
-            Settings
+            {t("Settings")}
           </a>
 
-          <h1 className="account-title">Your Account</h1>
+          <h1 className="account-title">{t("Your Account")}</h1>
 
           <p className="account-subtitle">
-            <i> welcome back, {customer.user_fname}.</i>
+            <i> {t("welcome back,")} {customer.user_fname}.</i>
           </p>
 
           {customer.customer_code && (
             <section className="account-section">
-              <h2 className="account-section-title">Membership Card</h2>
+              <h2 className="account-section-title">{t("Membership Card")}</h2>
               <MembershipCard
                 code={customer.customer_code}
                 name={`${customer.user_fname} ${customer.user_lname}`}
@@ -136,22 +138,22 @@ function Account() {
                 points={points}
               />
               <p className="account-member">
-                Scan this card at the self-checkout to earn points on your purchase.
+                {t("Scan this card at the self-checkout to earn points on your purchase.")}
               </p>
             </section>
           )}
 
           <section className="account-section">
-            <h2 className="account-section-title">Account Points</h2>
+            <h2 className="account-section-title">{t("Account Points")}</h2>
             <div className="points-summary">
               <div className="points-stat">
-                <span className="form-label">Points</span>
+                <span className="form-label">{t("Points")}</span>
                 <span className="points-value">{points.toLocaleString()}</span>
               </div>
 
               <div className="points-stat">
-                <span className="form-label">Tier</span>
-                <span className="points-value">{current.name}</span>
+                <span className="form-label">{t("Tier")}</span>
+                <span className="points-value">{t(current.name)}</span>
               </div>
             </div>
 
@@ -164,12 +166,12 @@ function Account() {
 
             <p className="points-next">
               {next
-                ? `${(next.min - points).toLocaleString()} points until ${next.name}`
-                : "You have reached the highest tier!"}
+                ? t("{0} points until {1}", { 0: (next.min - points).toLocaleString(), 1: t(next.name) })
+                : t("You have reached the highest tier!")}
             </p>
           </section>
           <section className="account-section spending-section">
-            <h2 className="account-section-title">Spending Summary</h2>
+            <h2 className="account-section-title">{t("Spending Summary")}</h2>
 
             <DateFilters
               startDate={startDate}
@@ -183,17 +185,17 @@ function Account() {
               className="account-button spending-filter-button"
               onClick={applyFilters}
             >
-              Apply filters
+              {t("Apply filters")}
             </button>
 
             {filterError && (
               <p className="account-subtitle purchase-filter-message">
-                <i>{filterError}</i>
+                <i>{t(filterError)}</i>
               </p>
             )}
 
             <div className="points-stat">
-              <span className="form-label">Total Spent</span>
+              <span className="form-label">{t("Total Spent")}</span>
               <span className="points-value">{formatPrice(totalSpent)}</span>
             </div>
             
@@ -201,21 +203,21 @@ function Account() {
           </section>
 
           <section className="account-section">
-            <h2 className="account-section-title">Purchase History</h2>
+            <h2 className="account-section-title">{t("Purchase History")}</h2>
 
             {purchases.length === 0 ? (
-              <p className="points-next">No purchases yet.</p>
+              <p className="points-next">{t("No purchases yet.")}</p>
             ) : (
               <div className="history-scroll">
                 <table className="history-table">
                   <thead>
                     <tr>
-                      <th>Receipt</th>
-                      <th>Date</th>
-                      <th>Items</th>
-                      <th>Status</th>
-                      <th>Total</th>
-                      <th>Points</th>
+                      <th>{t("Receipt")}</th>
+                      <th>{t("Date")}</th>
+                      <th>{t("Items")}</th>
+                      <th>{t("Status")}</th>
+                      <th>{t("Total")}</th>
+                      <th>{t("Points")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -236,7 +238,7 @@ function Account() {
                         <td
                           className={`history-status history-status-${p.purchase_payment_status}`}
                         >
-                          {p.purchase_payment_status}
+                          {t(p.purchase_payment_status)}
                         </td>
                         <td>{formatPrice(p.purchase_total)}</td>
                         <td className="history-points">
@@ -252,14 +254,14 @@ function Account() {
             {purchases.length > 0 && (
               <div className="history-actions">
                 <a href="/account/purchases" className="account-button">
-                  See all purchases
+                  {t("See all purchases")}
                 </a>
                 <button
                   type="button"
                   className="account-button"
                   onClick={() => downloadPurchasesCsv(purchases)}
                 >
-                  Download purchase history
+                  {t("Download purchase history")}
                 </button>
               </div>
             )}
@@ -267,7 +269,7 @@ function Account() {
         </div>
       </div>
       <div className="account-links">
-        <a href="/home">Back to home</a>
+        <a href="/home">{t("Back to home")}</a>
       </div>
     </main>
   );

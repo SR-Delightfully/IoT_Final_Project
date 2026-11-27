@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { downloadPurchasesCsv, fetchAccount, formatDateTime, formatPrice } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
 import ProductHistory from "../components/ProductHistory";
 import SpendingChart from "../components/SpendingChart";
+import { downloadPurchaseHistoryPdf, downloadReceiptPdf } from "../utils/reportPdfs";
+import { useI18n } from "../utils/i18n";
 function Purchases() {
+  const { t } = useI18n();
   const [purchases, setPurchases] = useState(null);
   const [error, setError] = useState("");
   // Store the dates selected in the calendar inputs.
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const chartRef = useRef(null);
+  // Dates of the list currently shown (the inputs may have changed since).
+  const [shownDates, setShownDates] = useState({ startDate: "", endDate: "" });
   // Today's local date in YYYY-MM-DD format for the calendar limits.
   const now = new Date();
   const today = [
@@ -60,7 +66,10 @@ function Purchases() {
     setPurchases(null);
 
     fetchAccount(startDate, endDate)
-      .then((data) => setPurchases(data.purchases))
+      .then((data) => {
+        setPurchases(data.purchases);
+        setShownDates({ startDate, endDate });
+      })
       .catch((err) => setError(err.message));
   }
   return (
@@ -68,7 +77,7 @@ function Purchases() {
       <div className="account-card">
         <div className="account-card-body">
 
-          <h1 className="account-title">Purchase History</h1>
+          <h1 className="account-title">{t("Purchase History")}</h1>
           <div className="spending-section">
             <DateFilters
               startDate={startDate}
@@ -83,21 +92,21 @@ function Purchases() {
               onClick={applyFilters}
               disabled={purchases === null && !error}
             >
-              Apply filters
+              {t("Apply filters")}
             </button>
           </div>
           {error || !purchases ? (
             <p className="account-subtitle purchase-filter-message">
-              <i>{error || "loading your purchases..."}</i>
+              <i>{t(error) || t("loading your purchases...")}</i>
             </p>
           ) : (
             <>
               <div className="purchase-report-columns">
                 <div className="account-section">
-                  <h2 className="account-section-title">Spending History</h2>
+                  <h2 className="account-section-title">{t("Spending History")}</h2>
 
                   <div className="points-stat">
-                    <span className="form-label">Total Spent</span>
+                    <span className="form-label">{t("Total Spent")}</span>
                     <span className="points-value">
                       {formatPrice(
                         purchases
@@ -107,28 +116,44 @@ function Purchases() {
                     </span>
                   </div>
 
-                  <SpendingChart purchases={purchases} />
+                  <div ref={chartRef}>
+                    <SpendingChart purchases={purchases} />
+                  </div>
                 </div>
 
                 <div className="account-section">
-                  <h2 className="account-section-title">Purchase History</h2>
+                  <h2 className="account-section-title">{t("Purchase History")}</h2>
                   <div className="purchases-header">
                     <p className="points-next">
-                      {purchases.length} purchase{purchases.length === 1 ? "" : "s"}
+                      {purchases.length} {t("purchase")}{purchases.length === 1 ? "" : "s"}
                     </p>
                     {purchases.length > 0 && (
-                      <button
-                        type="button"
-                        className="account-button"
-                        onClick={() => downloadPurchasesCsv(purchases)}
-                      >
-                        Download CSV
-                      </button>
+                      <div className="report-export-buttons">
+                        <button
+                          type="button"
+                          className="account-button"
+                          onClick={() => downloadPurchasesCsv(purchases)}
+                        >
+                          {t("Download CSV")}
+                        </button>
+                        <button
+                          type="button"
+                          className="account-button"
+                          onClick={() =>
+                            downloadPurchaseHistoryPdf(purchases, {
+                              ...shownDates,
+                              chartElement: chartRef.current,
+                            })
+                          }
+                        >
+                          {t("Download PDF")}
+                        </button>
+                      </div>
                     )}
                   </div>
 
                   {purchases.length === 0 ? (
-                    <p className="points-next">No purchases yet.</p>
+                    <p className="points-next">{t("No purchases yet.")}</p>
                   ) : (
                     <div className="purchase-list">
                       {purchases.map((p) => (
@@ -159,10 +184,18 @@ function Purchases() {
                             <span
                               className={`history-status history-status-${p.purchase_payment_status}`}
                             >
-                              {p.purchase_payment_status}
+                              {t(p.purchase_payment_status)}
                             </span>
-                            <span className="history-points">+{p.purchase_points_earned} pts</span>
+                            <span className="history-points">+{p.purchase_points_earned} {t("pts")}</span>
                             <span className="purchase-total">{formatPrice(p.purchase_total)}</span>
+                            <button
+                              type="button"
+                              className="purchase-receipt-pdf"
+                              onClick={() => downloadReceiptPdf(p)}
+                              title={t("Download this receipt as a PDF")}
+                            >
+                              {t("PDF")}
+                            </button>
                           </div>
                         </article>
                       ))}
@@ -178,7 +211,7 @@ function Purchases() {
       </div>
 
       <div className="account-links">
-        <a href="/account">Back to account</a>
+        <a href="/account">{t("Back to account")}</a>
       </div>
     </main >
   );

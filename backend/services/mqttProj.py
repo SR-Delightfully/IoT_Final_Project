@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from itertools import takewhile
 import smtplib
 import email
+import json
 import sqlite3
 import subprocess
 import threading
@@ -316,17 +317,42 @@ def send_alert(alert_id, fridge, temp, message, recipients):
                  "SENT" if ok else "FAILED", ok),
             )
 
-        # Dashboard notification for every admin, whether or not they got the email.
-        for admin in conn.execute("SELECT user_id FROM Users WHERE user_role = 'admin'"):
+        # Dashboard / bell notification for every admin, whether or not they got the email.
+        alert_data = json.dumps({
+            "kind": "fridge_alert",
+            "fridge": fridge["fridge_name"],
+            "temperature": temp,
+            "max": fridge["fridge_max_temperature"],
+        })
+        failed_data = json.dumps({
+            "kind": "alert_email_failed",
+            "fridge": fridge["fridge_name"],
+            "sent": len(sent),
+            "total": len(recipients),
+        })
+        for admin in conn.execute("SELECT user_id FROM Users WHERE user_role = 'admin'").fetchall():
             conn.execute(
                 """INSERT INTO Notifications
                        (alert_id, user_id, notification_type, notification_title, notification_summary,
                         notification_message_brief, notification_message_full,
-                        notification_status, notification_sent_at)
-                   VALUES (?, ?, 'ALERT', ?, ?, ?, ?, 'SENT', CURRENT_TIMESTAMP)""",
+                        notification_status, notification_sent_at, notification_link, notification_data)
+                   VALUES (?, ?, 'ALERT', ?, ?, ?, ?, 'SENT', CURRENT_TIMESTAMP, '/dashboard/fridges', ?)""",
                 (alert_id, admin["user_id"], title,
-                 f"Email sent to {len(sent)}/{len(recipients)} address(es)", brief, message),
+                 f"Email sent to {len(sent)}/{len(recipients)} address(es)", brief, message, alert_data),
             )
+            # Separate notice when the alert email could not go out to everyone.
+            if len(sent) < len(recipients):
+                conn.execute(
+                    """INSERT INTO Notifications
+                           (alert_id, user_id, notification_type, notification_title, notification_summary,
+                            notification_message_brief, notification_message_full,
+                            notification_status, notification_sent_at, notification_link, notification_data)
+                       VALUES (?, ?, 'SYSTEM', ?, ?, ?, ?, 'SENT', CURRENT_TIMESTAMP, '/dashboard/fridges', ?)""",
+                    (alert_id, admin["user_id"], "Alert email failed",
+                     f"Sent to {len(sent)} of {len(recipients)} address(es)",
+                     f"The alert email for {fridge['fridge_name']} reached {len(sent)} of {len(recipients)} address(es).",
+                     f"Check the Gmail settings in mqttProj.py. {brief}", failed_data),
+                )
 
     print(f"Alert #{alert_id} emailed to {len(sent)}/{len(recipients)} address(es)")
     show_system_notification(
