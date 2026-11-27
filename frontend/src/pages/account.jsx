@@ -6,6 +6,7 @@ import {
   formatPrice,
 } from "../utils/purchases";
 import DateFilters from "../components/DateFilters";
+import MembershipCard from "../components/MembershipCard";
 
 
 const TIERS = [
@@ -126,7 +127,18 @@ function Account() {
           </p>
 
           {customer.customer_code && (
-            <p className="account-member">Member #{customer.customer_code}</p>
+            <section className="account-section">
+              <h2 className="account-section-title">Membership Card</h2>
+              <MembershipCard
+                code={customer.customer_code}
+                name={`${customer.user_fname} ${customer.user_lname}`}
+                tier={current.name}
+                points={points}
+              />
+              <p className="account-member">
+                Scan this card at the self-checkout to earn points on your purchase.
+              </p>
+            </section>
           )}
 
           <section className="account-section">

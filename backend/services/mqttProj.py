@@ -32,6 +32,7 @@ LIMITS = {
 FRIDGES = [
     {"fridge_id": 1, "fridge_name": "Fridge 1", "fridge_location": "Kitchen", **LIMITS},
     {"fridge_id": 2, "fridge_name": "Fridge 2", "fridge_location": "Storage room", **LIMITS},
+    {"fridge_id": 3, "fridge_name": "Fridge 3", "fridge_location": "Server room", **LIMITS},
 ]
 
 # Every address here gets the alert AND is allowed to reply YES.

@@ -31,6 +31,9 @@ import Reports from "./pages/reports";
 // COMPONENTS:
 import NavBar from "./layout/navbar";
 import { ToastProvider } from "./components/Toaster";
+import ScannerSimulator from "./components/ScannerSimulator";
+
+const SHOW_SCANNER_SIMULATOR = import.meta.env.VITE_SCANNER_SIMULATOR !== "false";
 import UserDashboard from "./pages/userDashboard";
 
 function AppContent() {
@@ -70,6 +73,8 @@ function AppContent() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+
+      {SHOW_SCANNER_SIMULATOR && <ScannerSimulator />}
     </ToastProvider>
   );
 }

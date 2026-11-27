@@ -1,14 +1,45 @@
+import time
 
 from models.database import get_connection
 # Testing only: allow RFID tags to be reused across purchases.
 RFID_TEST_MODE = True
 
 class SelfCheckout:
+    # The kiosk page checks the cart every 1.5 s while a sale is open. If it
+    # stops for this long (crash, power or network loss) the sale is cancelled.
+    KIOSK_TIMEOUT = 120
+
     def __init__(self):
         self.active_session_id = None
         self.session_tags = {}
+        self.last_seen = 0
+
+    def touch(self, session_id):
+        if session_id == self.active_session_id:
+            self.last_seen = time.time()
+
+    def cancel_session(self, session_id):
+        with get_connection() as conn:
+            result = conn.execute(
+                """
+                UPDATE SelfCheckoutSessions
+                SET session_status = 'CANCELLED'
+                WHERE session_id = ? AND session_status = 'ACTIVE'
+                """,
+                (session_id,)
+            )
+
+        self.session_tags.pop(session_id, None)
+        if self.active_session_id == session_id:
+            self.active_session_id = None
+
+        return result.rowcount == 1
 
     def create_session(self, user_id=None):
+        # A sale the kiosk walked away from without cancelling is abandoned.
+        if self.active_session_id is not None:
+            self.cancel_session(self.active_session_id)
+
         with get_connection() as conn:
             cursor = conn.execute(
                 """
@@ -25,10 +56,39 @@ class SelfCheckout:
 
         self.active_session_id = session_id
         self.session_tags[session_id] = []
+        self.last_seen = time.time()
 
         return session_id
 
+    # True while the kiosk page has an open sale and is still checking in.
+    def is_busy(self):
+        session_id = self.active_session_id
+        if session_id is None:
+            return False
+
+        if time.time() - self.last_seen > self.KIOSK_TIMEOUT:
+            self.cancel_session(session_id)
+            return False
+
+        with get_connection() as conn:
+            session = conn.execute(
+                """
+                SELECT 1
+                FROM SelfCheckoutSessions
+                WHERE session_id = ? AND session_status = 'ACTIVE'
+                """,
+                (session_id,)
+            ).fetchone()
+
+        if session is None:
+            if self.active_session_id == session_id:
+                self.active_session_id = None
+            return False
+
+        return True
+
     def get_cart(self, session_id):
+        self.touch(session_id)
         with get_connection() as conn:
             session = conn.execute(
                 """
@@ -351,6 +411,10 @@ class SelfCheckout:
         epc = epc.strip().upper()
 
         if epc in self.session_tags.get(self.active_session_id, []):
+            return None
+
+        # Ignore tags once the kiosk page has gone away.
+        if not self.is_busy():
             return None
 
         result = self.scan_products([epc])

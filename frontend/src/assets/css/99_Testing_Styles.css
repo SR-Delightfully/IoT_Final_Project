@@ -2335,3 +2335,134 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* SCANNER SIMULATOR */
+.scanner-sim-toggle,
+.scanner-sim {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 9999;
+  font-size: 0.85rem;
+}
+
+.scanner-sim-toggle {
+  padding: 0.5rem 0.9rem;
+  color: var(--blue-0, #0b1020);
+  border: 3px double var(--gold-3, #8a6d2b);
+  background: linear-gradient(145deg, var(--gold-6, #d4b25c) 0%, var(--gold-3, #8a6d2b) 100%);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.scanner-sim {
+  display: flex;
+  flex-flow: column nowrap;
+  width: 20rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: var(--gold-8, #f0dca0);
+  border: 1px solid var(--gold-4, #a3843a);
+  background: var(--blue-1, #121a2e);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+.scanner-sim-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gold-3, #8a6d2b);
+}
+
+.scanner-sim-header b {
+  flex: 1;
+  letter-spacing: 0.05rem;
+}
+
+.scanner-sim-header button {
+  color: inherit;
+  border: none;
+  background: none;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.scanner-sim-tabs {
+  display: flex;
+}
+
+.scanner-sim-tabs button {
+  flex: 1;
+  padding: 0.4rem;
+  color: var(--tone-8, #bbb);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  cursor: pointer;
+}
+
+.scanner-sim-tabs button.is-active {
+  color: var(--gold-7, #e6c77a);
+  border-bottom-color: var(--gold-6, #d4b25c);
+}
+
+.scanner-sim-body {
+  display: flex;
+  flex-flow: column nowrap;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.scanner-sim-body label {
+  display: flex;
+  flex-flow: column nowrap;
+  gap: 0.3rem;
+  color: var(--tone-8, #bbb);
+}
+
+.scanner-sim-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.scanner-sim input,
+.scanner-sim select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  color: var(--blue-9, #e8eefc);
+  border: 1px solid var(--blue-5, #34456e);
+  background: var(--blue-2, #18223b);
+}
+
+.scanner-sim-row input[type="number"] {
+  flex: 0 0 4rem;
+}
+
+.scanner-sim-body button {
+  padding: 0.35rem 0.6rem;
+  color: var(--blue-0, #0b1020);
+  border: 1px solid var(--gold-3, #8a6d2b);
+  background: linear-gradient(145deg, var(--gold-6, #d4b25c) 0%, var(--gold-3, #8a6d2b) 100%);
+  cursor: pointer;
+}
+
+.scanner-sim-body button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.scanner-sim-target {
+  margin: 0;
+  color: var(--tone-8, #bbb);
+}
+
+.scanner-sim-status {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  color: var(--gold-8, #f0dca0);
+  border-top: 1px solid var(--gold-3, #8a6d2b);
+  font-family: monospace;
+  font-size: 0.75rem;
+}

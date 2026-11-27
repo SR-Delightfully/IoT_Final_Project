@@ -80,5 +80,8 @@
     "Membership found. Your account is linked to this purchase.": "Adhésion trouvée. Votre compte est associé à cet achat.",
     "Could not find a loyalty account with that email.": "Aucun compte de fidélité trouvé avec cette adresse courriel.",
     "Continue to Payment": "Continuer vers le paiement",
-    "Join our Loyalty Program and earn 100 points for every $1 CAD spent.": "Adhérez à notre programme de fidélité et obtenez 100 points par dollar canadien dépensé."
+    "Join our Loyalty Program and earn 100 points for every $1 CAD spent.": "Adhérez à notre programme de fidélité et obtenez 100 points par dollar canadien dépensé.",
+    "Welcome": "Bienvenue",
+    "An account is already signed in for this sale.": "Un compte est déjà connecté pour cet achat.",
+    "Membership card not recognized.": "Carte de membre non reconnue."
 }
