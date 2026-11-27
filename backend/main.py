@@ -1,10 +1,13 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlsplit, parse_qs
 import json
+import os
 import secrets
 import sqlite3
 import sys
+from datetime import date
 
-from models.database import init_db, DB_FILE
+from models.database import init_db, DB_FILE, get_connection
 from models.checkout_models.model_products import (
     add_product_with_barcode,
     update_product_with_barcode,
@@ -15,6 +18,8 @@ from models.client_models.model_customers import (
     add_customer,
     get_customer,
     get_customer_by_user_id,
+    get_customer_by_card,
+    ensure_membership_cards,
     update_customer
 )
 from models.client_models.model_receipts import get_customer_receipt
@@ -23,6 +28,12 @@ from models.management_models.model_readings import get_latest_reading
 from models.management_models.model_alerts import get_all_alerts
 from models.management_models.model_notifications import get_user_notifications
 from models.management_models.model_stock_receipts import add_stock_receipt
+from models.report_model import (
+    get_inventory_report,
+    get_sales_total,
+    get_product_sales,
+    get_daily_sales
+)
 
 # Merge conflict 2 nov 13 : keep dashboard/account functions, checkout services and receipt emailing.
 from models.user_model import (
@@ -33,17 +44,20 @@ from models.user_model import (
     update_user_name,
     change_password
 )
-from models.purchase_model import get_customer_points, get_customer_purchases
+from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history
 from models.product_model import (
     get_active_products,
     get_all_products,
     get_product,
     add_product,
     update_product,
-    add_stock
+    get_categories,
+    receive_tagged_stock,
+    TagError
 )
 from services.self_checkout import SelfCheckout
 from services.rfid_reader import RFIDReader
+from services.stock_scanner import StockScanner, normalize_epc, get_simulator_catalog
 from services.email_receipt import send_receipt_email 
 from services.breadboardCode import login
 
@@ -210,8 +224,11 @@ class Server(BaseHTTPRequestHandler):
     # ---------- GET ----------
 
     def do_GET(self):
-        path = self.path.split("?")[0].rstrip("/")
+        # Read the route before "?" and the date filters after "?" separately.
+        parsed_url = urlsplit(self.path)
+        path = parsed_url.path.rstrip("/")
         parts = path.strip("/").split("/")
+        query_params = parse_qs(parsed_url.query)
 
         # Public product catalogue (active products only)
         if path == "/products":
@@ -227,6 +244,109 @@ class Server(BaseHTTPRequestHandler):
             if self.require_admin():
                 self.send_json(200, get_all_products())
             return
+        # Inventory report: admin only.
+        if path == "/admin/reports/inventory":
+            if not self.require_admin():
+                return
+
+            try:
+                report = get_inventory_report()
+                self.send_json(200, report)
+            except sqlite3.Error as error:
+                print(f"Inventory report error: {error}")
+                self.send_json(500, {"error": "Could not load inventory report"})
+
+            return
+        # Sales report admin only.
+        if path == "/admin/reports/sales":
+            if not self.require_admin():
+                return
+
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+
+            if start_date and end_date and start_date > end_date:
+                self.send_json(400, {"error": "Start date must be on or before end date."})
+                return
+
+            try:
+                products = get_product_sales(start_date, end_date)
+
+                self.send_json(200, {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "total_sales_cents": get_sales_total(start_date, end_date),
+                    "total_units_sold": sum(p["units_sold"] for p in products),
+                    "products": products,
+                    "daily_sales": get_daily_sales(start_date, end_date)
+                })
+            except sqlite3.Error as error:
+                print(f"Sales report error: {error}")
+                self.send_json(500, {"error": "Could not load sales report"})
+
+            return
+        # Products, tags and membership cards for the scanner simulator
+        if path == "/simulate/catalog":
+            if self.require_simulator():
+                self.send_json(200, get_simulator_catalog())
+            return
+
+        if path == "/admin/categories":
+            if self.require_admin():
+                self.send_json(200, get_categories())
+            return
+
+        # Tags collected while the admin is receiving stock
+        if path == "/admin/scan":
+            if self.require_admin():
+                self.send_json(200, self.scanner.snapshot())
+            return
+
+        # Active loyalty rewards for the signed-in customer.
+        if path == "/loyalty/rewards":
+            user = self.require_user()
+            if not user:
+                return
+
+            customer = get_customer_by_user_id(user["user_id"])
+            if customer is None:
+                self.send_json(404, {"error": "Customer account not found"})
+                return
+
+            if not customer.get("customer_is_member"):
+                self.send_json(403, {"error": "This account is not enrolled in the loyalty program"})
+                return
+
+            try:
+                with get_connection() as conn:
+                    rewards = conn.execute(
+                        """
+                        SELECT reward_id, reward_name, reward_description,
+                               reward_image_url, reward_points_cost
+                        FROM Rewards
+                        WHERE reward_is_active = 1
+                        ORDER BY reward_points_cost, reward_name
+                        """
+                    ).fetchall()
+
+                self.send_json(200, {
+                    "points": get_customer_points(customer["customer_id"]),
+                    "rewards": [dict(reward) for reward in rewards]
+                })
+            except Exception as error:
+                print(f"Loyalty rewards error: {error}")
+                self.send_json(500, {"error": "Could not load loyalty rewards"})
+            return
 
         # The logged-in user's own details (used by the nav bar and settings page)
         if path == "/me":
@@ -235,8 +355,8 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(200, self.user_details(user))
             return
 
-        # Account page: customer info, loyalty points and purchase history
-        if path == "/me/account":
+        # Both routes share login, customer lookup and date validation.
+        if path in ("/me/account", "/me/account/product-history"):
             user = self.require_user()
             if not user:
                 return
@@ -247,10 +367,76 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Customer account not found"})
                 return
 
+            start_date = query_params.get("start_date", [None])[0]
+            end_date = query_params.get("end_date", [None])[0]
+
+            try:
+                if start_date is not None:
+                    start_date = date.fromisoformat(start_date).isoformat()
+
+                if end_date is not None:
+                    end_date = date.fromisoformat(end_date).isoformat()
+
+            except ValueError:
+                self.send_json(400, {"error": "Invalid date. Use YYYY-MM-DD."})
+                return
+
+            if start_date is not None and end_date is not None:
+                if start_date > end_date:
+                    self.send_json(
+                        400,
+                        {"error": "Start date must be on or before end date."}
+                    )
+                    return
+
+            # Product history runs after the customer and dates are known.
+            if path == "/me/account/product-history":
+                try:
+                    product_id = int(query_params.get("product_id", [""])[0])
+                    if product_id <= 0:
+                        raise ValueError
+                except ValueError:
+                    self.send_json(400, {"error": "A valid product_id is required"})
+                    return
+
+                history = get_customer_product_history(
+                    customer["customer_id"],
+                    product_id,
+                    start_date,
+                    end_date
+                )
+
+                purchase_count = len({item["purchase_id"] for item in history})
+                total_quantity = sum(
+                    item["purchase_item_quantity"] for item in history
+                )
+
+                self.send_json(200, {
+                    "product_id": product_id,
+                    "purchase_count": purchase_count,
+                    "total_quantity": total_quantity,
+                    "history": history
+                })
+                return
+
+            # Account history and spending total.
+            purchases = get_customer_purchases(
+                customer["customer_id"],
+                start_date,
+                end_date
+            )
+
+            total_spent_cents = 0
+
+            for purchase in purchases:
+                if purchase["purchase_payment_status"] == "paid":
+                    total_spent_cents += purchase["purchase_total"]
+
             self.send_json(200, {
                 "customer": customer,
                 "points": get_customer_points(customer["customer_id"]),
-                "purchases": get_customer_purchases(customer["customer_id"])
+                "purchases": purchases,
+                "total_spent_cents": total_spent_cents
             })
             return
 
@@ -633,6 +819,18 @@ class Server(BaseHTTPRequestHandler):
             self.login_user()
             return
 
+        if len(parts) == 4 and parts[0] == "checkout" and parts[1] == "session" and parts[3] == "login":
+            self.login_checkout_customer(int(parts[2]) if parts[2].isdigit() else None)
+            return
+
+        if path == "/loyalty/redeem":
+            self.redeem_loyalty_reward()
+            return
+
+        if path == "/checkout/authorize-employee":
+            self.authorize_employee_adjustment()
+            return
+
         if path == "/products":
             self.create_product()
             return
@@ -646,9 +844,32 @@ class Server(BaseHTTPRequestHandler):
             self.add_product_route()
             return
 
-        # Receive stock for a product (admin dashboard)
-        if len(parts) == 4 and parts[:2] == ["admin", "products"] and parts[3] == "stock":
-            self.add_stock_route(parts[2])
+        # Receive scanned RFID tags as stock for an existing product
+        if len(parts) == 4 and parts[:2] == ["admin", "products"] and parts[3] == "receive":
+            self.receive_tags_route(parts[2])
+            return
+
+        # Pretend the RFID reader just read these tags
+        if path == "/simulate/rfid":
+            self.simulate_rfid()
+            return
+
+        if len(parts) == 3 and parts[:2] == ["admin", "scan"]:
+            self.scan_mode_route(parts[2])
+            return
+
+        # The kiosk page was left: cancel the open sale and free the reader
+        if len(parts) == 4 and parts[0] == "checkout" and parts[1] == "session" and parts[3] == "cancel":
+            if not parts[2].isdigit():
+                self.send_json(400, {"error": "Invalid checkout session ID"})
+            elif self.checkout.cancel_session(int(parts[2])):
+                self.send_json(200, {"session_status": "CANCELLED"})
+            else:
+                self.send_json(404, {"error": "Active checkout session not found"})
+            return
+
+        if len(parts) == 4 and parts[0] == "checkout" and parts[1] == "session" and parts[3] == "card":
+            self.link_membership_card(int(parts[2]) if parts[2].isdigit() else None)
             return
 
         if path == "/checkout/session":
@@ -764,6 +985,87 @@ class Server(BaseHTTPRequestHandler):
             "user": user
         })
 
+    def login_checkout_customer(self, session_id):
+        if session_id is None:
+            self.send_json(400, {"error": "Invalid checkout session ID"})
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        email = data.get("email")
+        password = data.get("password")
+
+        if not isinstance(email, str) or not email.strip() or not isinstance(password, str) or not password:
+            self.send_json(400, {"error": "Email and password are required"})
+            return
+
+        try:
+            user = authenticate_user(email.strip(), password)
+            if not user:
+                self.send_json(401, {"error": "Incorrect email or password"})
+                return
+
+            customer = get_customer_by_user_id(user["user_id"])
+            if customer is None:
+                self.send_json(404, {"error": "Customer account not found"})
+                return
+
+            with get_connection() as conn:
+                session = conn.execute(
+                    """
+                    SELECT session_status
+                    FROM SelfCheckoutSessions
+                    WHERE session_id = ?
+                    """,
+                    (session_id,)
+                ).fetchone()
+
+                if session is None or session["session_status"] != "ACTIVE":
+                    self.send_json(404, {"error": "Active checkout session not found"})
+                    return
+
+                conn.execute(
+                    """
+                    UPDATE SelfCheckoutSessions
+                    SET user_id = ?
+                    WHERE session_id = ?
+                    """,
+                    (user["user_id"], session_id)
+                )
+
+                membership = conn.execute(
+                    """
+                    SELECT customer_membership_points
+                    FROM CustomerMemberships
+                    WHERE customer_id = ?
+                    """,
+                    (customer["customer_id"],)
+                ).fetchone()
+
+                account = {
+                    "customer_id": customer["customer_id"],
+                    "is_member": bool(customer.get("customer_is_member", 0)),
+                    "user_id": user["user_id"],
+                    "first_name": user["user_fname"],
+                    "last_name": user["user_lname"],
+                    "email": user["user_email"],
+                    "loyalty_points": membership["customer_membership_points"] if membership else 0
+                }
+
+            self.send_json(200, {
+                "message": "Signed in successfully",
+                "account": account
+            })
+
+        except sqlite3.Error as error:
+            print(f"Checkout login database error: {error}")
+            self.send_json(500, {"error": "Could not sign in"})
+        except Exception as error:
+            print(f"Checkout login error: {error}")
+            self.send_json(500, {"error": "Could not sign in"})
+
     def register_customer(self):
         try:
             data = self.read_json()
@@ -827,6 +1129,177 @@ class Server(BaseHTTPRequestHandler):
             print(f"Registration error: {error}")
             self.send_json(500, {"error": "Could not add customer"})
 
+    def authorize_employee_adjustment(self):
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        employee = self.get_employee_by_id(data.get("employee_id"))
+        if employee is None:
+            self.send_json(403, {"error": "Employee ID not recognized or not authorized"})
+            return
+
+        self.send_json(200, {
+            "authorized": True,
+            "employee": {
+                "user_id": employee["user_id"],
+                "name": f"{employee['user_fname']} {employee['user_lname']}"
+            }
+        })
+
+    @staticmethod
+    def get_employee_by_id(employee_id):
+        if isinstance(employee_id, bool):
+            return None
+
+        try:
+            employee_id = int(str(employee_id).strip())
+        except (TypeError, ValueError):
+            return None
+
+        if employee_id <= 0:
+            return None
+
+        with get_connection() as conn:
+            employee = conn.execute(
+                """
+                SELECT user_id, user_role, user_fname, user_lname
+                FROM Users
+                WHERE user_id = ?
+                  AND user_role IN ('employee', 'admin')
+                """,
+                (employee_id,)
+            ).fetchone()
+
+        return dict(employee) if employee else None
+
+    def redeem_loyalty_reward(self):
+        user = self.require_user()
+        if not user:
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        reward_id = data.get("reward_id")
+        if isinstance(reward_id, bool) or not str(reward_id).isdigit():
+            self.send_json(400, {"error": "A valid reward ID is required"})
+            return
+
+        customer = get_customer_by_user_id(user["user_id"])
+        if customer is None:
+            self.send_json(404, {"error": "Customer account not found"})
+            return
+
+        if not customer.get("customer_is_member"):
+            self.send_json(403, {"error": "This account is not enrolled in the loyalty program"})
+            return
+
+        conn = get_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+
+            reward = conn.execute(
+                """
+                SELECT reward_id, reward_name, reward_description,
+                       reward_points_cost
+                FROM Rewards
+                WHERE reward_id = ? AND reward_is_active = 1
+                """,
+                (int(reward_id),)
+            ).fetchone()
+
+            if reward is None:
+                conn.rollback()
+                self.send_json(404, {"error": "Reward is no longer available"})
+                return
+
+            membership = conn.execute(
+                """
+                SELECT customer_membership_points
+                FROM CustomerMemberships
+                WHERE customer_id = ?
+                """,
+                (customer["customer_id"],)
+            ).fetchone()
+
+            if membership is None:
+                conn.rollback()
+                self.send_json(409, {"error": "Loyalty membership could not be found"})
+                return
+
+            points_cost = reward["reward_points_cost"]
+            current_points = membership["customer_membership_points"]
+            if current_points < points_cost:
+                conn.rollback()
+                self.send_json(400, {"error": "You do not have enough points for this reward"})
+                return
+
+            conn.execute(
+                """
+                UPDATE CustomerMemberships
+                SET customer_membership_points = customer_membership_points - ?,
+                    customer_membership_updated_at = CURRENT_TIMESTAMP
+                WHERE customer_id = ?
+                """,
+                (points_cost, customer["customer_id"])
+            )
+
+            transaction_id = conn.execute(
+                """
+                INSERT INTO LoyaltyTransactions (
+                    customer_id,
+                    loyalty_transaction_type,
+                    loyalty_points_change,
+                    loyalty_transaction_description
+                )
+                VALUES (?, 'REDEEM', ?, ?)
+                """,
+                (
+                    customer["customer_id"],
+                    -points_cost,
+                    f"Redeemed reward: {reward['reward_name']}"
+                )
+            ).lastrowid
+
+            redemption_id = conn.execute(
+                """
+                INSERT INTO RewardRedemptions (
+                    reward_id,
+                    loyalty_transaction_id,
+                    redemption_status
+                )
+                VALUES (?, ?, 'COMPLETED')
+                """,
+                (int(reward_id), transaction_id)
+            ).lastrowid
+
+            balance = conn.execute(
+                """
+                SELECT customer_membership_points
+                FROM CustomerMemberships
+                WHERE customer_id = ?
+                """,
+                (customer["customer_id"],)
+            ).fetchone()["customer_membership_points"]
+
+            conn.commit()
+            self.send_json(201, {
+                "message": "Reward redeemed successfully",
+                "redemption_id": redemption_id,
+                "reward": dict(reward),
+                "points_redeemed": points_cost,
+                "points_balance": balance
+            })
+
+        except Exception as error:
+            conn.rollback()
+            print(f"Loyalty redemption error: {error}")
+            self.send_json(500, {"error": "Could not redeem this reward"})
+        finally:
+            conn.close()
+
     def add_product_route(self):
         if not self.require_admin():
             return
@@ -840,6 +1313,11 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(400, {"error": error})
             return
 
+        epcs, supplier, error = self.read_tag_batch(data, required=False)
+        if error:
+            self.send_json(400, {"error": error})
+            return
+
         try:
             product_id = add_product(
                 product["name"],
@@ -847,19 +1325,52 @@ class Server(BaseHTTPRequestHandler):
                 product["price"],
                 product["upc"],
                 product["producer"],
-                product.get("image_url")
+                product.get("image_url"),
+                epcs=epcs,
+                supplier=supplier
             )
+        except TagError as error:
+            self.send_json(409, {"error": str(error)})
+            return
         except sqlite3.IntegrityError:
             self.send_json(409, {"error": "A product with this UPC already exists"})
             return
 
+        if epcs:
+            self.scanner.stop()
+            self.scanner.clear()
+
         self.send_json(201, get_product(product_id))
 
-    def add_stock_route(self, product_id):
+    # Reads the scanned tags and optional supplier sent with a stock batch
+    def read_tag_batch(self, data, required=True):
+        raw = data.get("epcs", [])
+        if not isinstance(raw, list):
+            return None, None, "epcs must be a list"
+
+        epcs = []
+        for value in raw:
+            epc = normalize_epc(value)
+            if epc is None:
+                return None, None, f"Invalid tag: {value}"
+            if epc not in epcs:
+                epcs.append(epc)
+
+        if required and not epcs:
+            return None, None, "Scan at least one tag"
+
+        supplier = data.get("supplier")
+        if supplier is not None and not isinstance(supplier, str):
+            return None, None, "Supplier must be text"
+        supplier = (supplier or "").strip() or None
+
+        return epcs, supplier, None
+
+    def receive_tags_route(self, product_id):
         if not self.require_admin():
             return
 
-        if not product_id.isdigit() or get_product(int(product_id)) is None:
+        if not product_id.isdigit():
             self.send_json(404, {"error": "Product not found"})
             return
 
@@ -867,16 +1378,137 @@ class Server(BaseHTTPRequestHandler):
         if data is None:
             return
 
-        quantity = data.get("quantity")
-        if type(quantity) is not int or quantity <= 0:
-            self.send_json(400, {"error": "Quantity must be a positive whole number"})
+        epcs, supplier, error = self.read_tag_batch(data)
+        if error:
+            self.send_json(400, {"error": error})
             return
 
-        note = data.get("note")
-        note = (note.strip() or None) if isinstance(note, str) else None
+        try:
+            received = receive_tagged_stock(int(product_id), epcs, supplier)
+        except TagError as error:
+            self.send_json(409, {"error": str(error)})
+            return
+        except sqlite3.IntegrityError as error:
+            print(f"Stock receive error: {error}")
+            self.send_json(409, {"error": "Could not save these tags"})
+            return
 
-        add_stock(int(product_id), quantity, note)
-        self.send_json(201, get_product(int(product_id)))
+        if received is None:
+            self.send_json(404, {"error": "Product not found"})
+            return
+
+        self.scanner.stop()
+        self.scanner.clear()
+
+        product = get_product(int(product_id))
+        product["received"] = received
+        self.send_json(201, product)
+
+    # The scanner simulator is on unless SCANNER_SIMULATOR=0
+    def require_simulator(self):
+        if os.getenv("SCANNER_SIMULATOR", "1") == "0":
+            self.send_json(404, {"error": "Scanner simulator is disabled"})
+            return False
+        return True
+
+    def simulate_rfid(self):
+        if not self.require_simulator():
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        raw = data.get("epcs")
+        if not isinstance(raw, list) or not raw:
+            self.send_json(400, {"error": "epcs must be a non-empty list"})
+            return
+
+        epcs = [normalize_epc(value) for value in raw]
+        if None in epcs:
+            self.send_json(400, {"error": "Tags must be up to 24 hex characters"})
+            return
+
+        routed_to = "ignored"
+        for epc in epcs:
+            routed_to = self.route_tag(epc)
+
+        self.send_json(200, {"routed_to": routed_to, "count": len(epcs)})
+
+    # Turn the admin stock-scanning mode on or off
+    def scan_mode_route(self, action):
+        if not self.require_admin():
+            return
+
+        if action == "start":
+            if self.checkout.is_busy():
+                self.send_json(409, {"error": "The self-checkout is in use. Try again when the sale is finished."})
+                return
+            self.scanner.start()
+        elif action == "stop":
+            self.scanner.stop()
+        elif action == "clear":
+            self.scanner.clear()
+        else:
+            self.send_json(404, {"error": "Route not found"})
+            return
+
+        self.send_json(200, self.scanner.snapshot())
+
+    # Link a customer to the sale by scanning their membership card
+    def link_membership_card(self, session_id):
+        if session_id is None:
+            self.send_json(400, {"error": "Invalid checkout session ID"})
+            return
+
+        data = self.read_json_or_400()
+        if data is None:
+            return
+
+        code = data.get("code")
+        code = code.strip() if isinstance(code, str) else ""
+
+        customer = get_customer_by_card(code)
+        if customer is None:
+            self.send_json(404, {"error": "Membership card not recognized"})
+            return
+
+        with get_connection() as conn:
+            session = conn.execute(
+                """
+                SELECT user_id, session_status
+                FROM SelfCheckoutSessions
+                WHERE session_id = ?
+                """,
+                (session_id,)
+            ).fetchone()
+
+            if session is None or session["session_status"] != "ACTIVE":
+                self.send_json(404, {"error": "Active checkout session not found"})
+                return
+
+            # A signed-in account keeps the sale; the card is ignored.
+            if session["user_id"] is not None:
+                self.send_json(409, {"error": "An account is already linked to this sale"})
+                return
+
+            conn.execute(
+                "UPDATE SelfCheckoutSessions SET user_id = ? WHERE session_id = ?",
+                (customer["user_id"], session_id)
+            )
+
+        self.send_json(200, {
+            "message": f"Welcome, {customer['user_fname']}",
+            "account": {
+                "customer_id": customer["customer_id"],
+                "is_member": bool(customer.get("customer_is_member", 0)),
+                "user_id": customer["user_id"],
+                "first_name": customer["user_fname"],
+                "last_name": customer["user_lname"],
+                "loyalty_points": customer["customer_loyalty_points"],
+                "via_card": True
+            }
+        })
 
     # Create a product with its category and barcode
     def create_product(self):
@@ -958,6 +1590,10 @@ class Server(BaseHTTPRequestHandler):
             self.send_json(400, {"error": "Product does not exist or stock data is invalid"})
 
     def create_checkout_session(self):
+        if self.scanner.is_active():
+            self.send_json(409, {"error": "Stock is being received. Please wait a moment."})
+            return
+
         try:
             data = self.read_json()
             user_id = data.get("user_id")
@@ -1085,6 +1721,25 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "Invalid quantity"})
                 return
 
+            current_cart = self.checkout.get_cart(int(parts[2]))
+            if current_cart is None:
+                self.send_json(404, {"error": "Checkout session not found"})
+                return
+
+            current_item = next(
+                (item for item in current_cart["items"] if item["product_id"] == int(parts[4])),
+                None
+            )
+            if current_item is None:
+                self.send_json(404, {"error": "Cart item not found"})
+                return
+
+            if quantity < current_item["session_item_quantity"]:
+                employee = self.get_employee_by_id(data.get("employee_id"))
+                if employee is None:
+                    self.send_json(403, {"error": "Employee authorization is required to reduce item quantities"})
+                    return
+
             cart = self.checkout.set_quantity(int(parts[2]), int(parts[4]), quantity)
 
             if cart is False or cart is None:
@@ -1102,6 +1757,13 @@ class Server(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         parts = self.path.split("?")[0].strip("/").split("/")
+
+        # Drop a stray tag from the current stock scan
+        if len(parts) == 4 and parts[:3] == ["admin", "scan", "tags"]:
+            if self.require_admin():
+                self.scanner.remove(parts[3])
+                self.send_json(200, self.scanner.snapshot())
+            return
 
         # Hide the product without deleting its database record.
         if len(parts) == 2 and parts[0] == "products":
@@ -1133,6 +1795,15 @@ class Server(BaseHTTPRequestHandler):
             return
 
         try:
+            data = self.read_json_or_400()
+            if data is None:
+                return
+
+            employee = self.get_employee_by_id(data.get("employee_id"))
+            if employee is None:
+                self.send_json(403, {"error": "Employee authorization is required to remove cart items"})
+                return
+
             cart = self.checkout.remove_from_session(int(parts[2]), int(parts[4]))
 
             if cart is False or cart is None:
@@ -1148,14 +1819,35 @@ class Server(BaseHTTPRequestHandler):
 def run_server():
     init_db()
 
+    try:
+        updated = ensure_membership_cards()
+        if updated:
+            print(f"[INFO] Issued membership card codes to {updated} customer(s).")
+    except Exception as error:
+        print(f"[WARNING] Could not update membership cards: {error}")
+
     checkout = SelfCheckout()
+    scanner = StockScanner()
     Server.checkout = checkout
+    Server.scanner = scanner
+
+    # Tags go to the stock scan while an admin is receiving stock,
+    # otherwise to the self-checkout.
+    def route_tag(epc, rssi=None):
+        if scanner.is_active():
+            scanner.process_rfid(epc, rssi)
+            return "stock-scan"
+
+        checkout.process_rfid(epc, rssi)
+        return "checkout" if checkout.active_session_id is not None else "ignored"
+
+    Server.route_tag = staticmethod(route_tag)
 
     reader = None
 
     try:
         reader = RFIDReader()
-        reader.start(checkout.process_rfid)
+        reader.start(route_tag)
         print("[INFO] RFID reader initialized.")
     except Exception as error:
         print(f"[WARNING] RFID reader unavailable: {error}")

@@ -22,10 +22,17 @@ def send_receipt_email(customer_email, receipt):
             f"{quantity} x ${price:.2f} = ${quantity * price:.2f}"
         )
 
-    lines.extend([
+        lines.extend([
         "",
-        f"Total: ${receipt['total']:.2f}",
-        f"Points earned: {receipt['points_earned']}"
+        "Payment summary (CAD):",
+        f"Subtotal: ${receipt['subtotal']:.2f}",
+        f"GST (5%): ${receipt['gst']:.2f}",
+        f"QST (9.975%): ${receipt['qst']:.2f}",
+        f"Discount: -${receipt['discount']:.2f}",
+        f"Payment method: {receipt['payment_method'].capitalize()}",
+        "",
+        f"Points earned: {receipt['points_earned']}",
+        f"Current points balance: {receipt['loyalty_points_balance']}"
     ])
 
     message = EmailMessage()

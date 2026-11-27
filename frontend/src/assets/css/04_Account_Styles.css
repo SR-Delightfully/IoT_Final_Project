@@ -123,7 +123,7 @@
 /* POINT TRACKER */
 .points-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
@@ -393,4 +393,192 @@
 .purchase-total {
   color: var(--gold-7);
   font-size: 1.1rem;
+}
+/* Make calendar icons visible against the dark background. */
+.account-page input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 1;
+  cursor: pointer;
+}
+/* Display the two date fields side by side. */
+.purchase-date-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+/* Show white labels above the calendar inputs. */
+.purchase-date-filters label {
+  display: block;
+  color: white;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.account-page .purchase-filter-message {
+  margin-top: 20px;
+}
+.purchase-date-filters .react-datepicker__input-container input {
+  color:white;
+  caret-color: white;
+}
+.spending-section .purchase-date-filters {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.spending-section .react-datepicker-wrapper,
+.spending-section .react-datepicker__input-container input {
+  width: 100%;
+}
+
+.spending-section .react-datepicker__input-container input {
+  box-sizing: border-box;
+}
+
+.spending-section .spending-filter-button {
+  display: block;
+  margin: 16px auto 20px;
+}
+.history-table th:nth-child(1),
+.history-table td:nth-child(1),
+.history-table th:nth-child(2),
+.history-table td:nth-child(2) {
+  white-space: nowrap;
+}
+.product-history-section label,
+.product-history-section input,
+.product-history-section .purchase-items {
+  color: white;
+}
+
+.product-history-section input {
+  caret-color: white;
+}
+
+.product-history-section input::placeholder {
+  color: #bbb;
+}
+.product-history-section .form-field label {
+  display: block;
+  position: static;
+  margin-bottom: 8px;
+}
+/* Give the reporting page enough width for both histories. */
+.account-page.purchase-report-page {
+  width: calc(100% - 32px);
+  max-width: 1440px;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+.purchase-report-page .account-card {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+/* Receipts on the left, product history on the right. */
+.purchase-report-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+}
+
+.purchase-report-columns > * {
+  min-width: 0;
+}
+
+.purchase-report-columns > .account-section {
+  margin-top: 0;
+}
+
+/* Stack the histories on smaller screens. */
+@media (max-width: 1000px) {
+  .purchase-report-columns {
+    grid-template-columns: 1fr;
+  }
+}
+/* Scroll receipts when the list grows too long. */
+.purchase-report-columns .purchase-list {
+  max-height: 450px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+/* MEMBERSHIP CARD */
+.membership-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "top top"
+    "holder points"
+    "barcode barcode";
+  gap: 0.75rem 1rem;
+  width: 100%;
+  max-width: 24rem;
+  aspect-ratio: 1.586;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  color: var(--gold-8);
+  border: 3px double var(--gold-4);
+  border-radius: 0.75rem;
+  background: linear-gradient(145deg, var(--blue-3) 0%, var(--blue-1) 60%, var(--gold-1) 100%);
+  box-shadow:
+    0 6px 18px var(--tone-0),
+    inset 0 1px 0 var(--tone-5);
+}
+
+.membership-card-top {
+  grid-area: top;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.membership-card-store {
+  letter-spacing: 0.15rem;
+  font-weight: 800;
+}
+
+.membership-card-tier {
+  padding: 0.1rem 0.5rem;
+  color: var(--blue-0);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08rem;
+  text-transform: uppercase;
+  background: linear-gradient(145deg, var(--gold-6) 0%, var(--gold-3) 100%);
+}
+
+.membership-card-holder {
+  grid-area: holder;
+}
+
+.membership-card-points {
+  grid-area: points;
+  text-align: right;
+}
+
+.membership-card-holder,
+.membership-card-points {
+  display: flex;
+  flex-flow: column nowrap;
+}
+
+.membership-card-label {
+  color: var(--tone-8);
+  font-size: 0.65rem;
+  letter-spacing: 0.1rem;
+}
+
+.membership-card-barcode {
+  grid-area: barcode;
+  display: flex;
+  justify-content: center;
+}
+
+.membership-card-barcode svg {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.25rem;
 }

@@ -15,6 +15,71 @@ def hash_password(password):
     )
     return f"{salt.hex()}:{hashed.hex()}"
 
+CARD_PREFIX = "4"
+
+
+# 12-digit UPC-A for a customer's membership card: "4", the customer ID
+# padded to 10 digits, then the UPC check digit.
+def membership_card_upc(customer_id):
+    body = f"{CARD_PREFIX}{customer_id:010d}"
+    odd = sum(int(digit) for digit in body[0::2])
+    even = sum(int(digit) for digit in body[1::2])
+    check = (10 - (odd * 3 + even) % 10) % 10
+    return f"{body}{check}"
+
+
+def is_membership_card(code):
+    return (
+        isinstance(code, str)
+        and len(code) == 12
+        and code.isdigit()
+        and code.startswith(CARD_PREFIX)
+        and membership_card_upc(int(code[1:11])) == code
+    )
+
+
+# Give every customer a membership card code, replacing older MEM codes.
+def ensure_membership_cards():
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT customer_id, customer_code FROM Customers"
+        ).fetchall()
+
+        updated = 0
+        for row in rows:
+            upc = membership_card_upc(row["customer_id"])
+            if row["customer_code"] != upc:
+                conn.execute(
+                    "UPDATE Customers SET customer_code = ? WHERE customer_id = ?",
+                    (upc, row["customer_id"])
+                )
+                updated += 1
+
+        return updated
+
+
+def get_customer_by_card(code):
+    if not is_membership_card(code):
+        return None
+
+    with db_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT c.*, u.user_fname, u.user_lname,
+                   COALESCE(cm.customer_membership_points, 0)
+                       AS customer_loyalty_points
+            FROM Customers c
+            JOIN Users u ON c.user_id = u.user_id
+            LEFT JOIN CustomerMemberships cm
+                ON c.customer_id = cm.customer_id
+            WHERE c.customer_code = ?
+            """,
+            (code,)
+        ).fetchone()
+
+        return dict(row) if row else None
+
+
 def add_customer(first_name, last_name, address, phone, email, password, customer_code=None, is_member=False):
     if not isinstance(is_member, (bool, int)) or is_member not in (0, 1):
         raise ValueError("Invalid membership status")
@@ -67,9 +132,9 @@ def add_customer(first_name, last_name, address, phone, email, password, custome
         )
 
         customer_id = cursor.lastrowid
-        # Give new members a membership code based on their customer ID.
-        if is_member and customer_code is None:
-            customer_code = f"MEM{customer_id:08d}"
+        # Every customer gets a membership card code based on their customer ID.
+        if customer_code is None:
+            customer_code = membership_card_upc(customer_id)
 
             conn.execute(
                 """

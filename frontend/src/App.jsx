@@ -1,4 +1,5 @@
-import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router";
+
+import { Navigate, Route, BrowserRouter as Router, Routes, useLocation } from "react-router";
 
 // CSS FILES:
 import "./assets/css/00_Global_Styles.css";
@@ -25,53 +26,63 @@ import SelfCheckout from "./pages/selfCheckout";
 import Settings from "./pages/settings";
 import Testing from "./pages/testing";
 import UserRoles from "./pages/userRoles";
+import Reports from "./pages/reports";
 
 // COMPONENTS:
-import NavBar from "./components/NavBar";
+import NavBar from "./layout/navbar";
 import { ToastProvider } from "./components/Toaster";
+import ScannerSimulator from "./components/ScannerSimulator";
+
+const SHOW_SCANNER_SIMULATOR = import.meta.env.VITE_SCANNER_SIMULATOR !== "false";
+import UserDashboard from "./pages/userDashboard";
+
+function AppContent() {
+  const location = useLocation();
+
+  const hideNavBar = [
+    "/login",
+    "/register",
+    "/self-checkout",
+  ].includes(location.pathname);
+
+  return (
+    <ToastProvider>
+      {!hideNavBar && <NavBar />}
+
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Registration />} />
+
+        {/* Store */}
+        <Route path="/products" element={<Products />} />
+        <Route path="/self-checkout" element={<SelfCheckout />} />
+
+        {/* Customer account */}
+        <Route path="/customer" element={<Account />} />
+        <Route path="/customer/purchases" element={<Purchases />} />
+        <Route path="/customer/settings" element={<Settings />} />
+
+        {/* Admin dashboard */}
+        <Route path="/dashboard" element={<p>Create overview of all dashboards(generalized stats)</p>} />
+        <Route path="/dashboard/inventory" element={<ProductDashboard />} />
+        <Route path="/dashboard/reports" element={<Reports />} />
+        <Route path="/dashboard/fridges" element={<FridgeDashboard />} />
+        <Route path="/dashboard/users" element={<UserDashboard />} />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
+      {SHOW_SCANNER_SIMULATOR && <ScannerSimulator />}
+    </ToastProvider>
+  );
+}
 
 function App() {
   return (
-    //BrowserRouter: this is where we handle routes in the frontend :)
     <Router>
-      <ToastProvider>
-        <NavBar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Registration />} />
-
-          {/* Store */}
-          <Route path="/products" element={<Products />} />
-          <Route path="/self-checkout" element={<SelfCheckout />} />
-          {/* payment and receipt happen inside the self-checkout page */}
-          <Route path="/self-checkout/*" element={<Navigate to="/self-checkout" replace />} />
-
-          {/* Customer account */}
-          <Route path="/account" element={<Account />} />
-          <Route path="/account/purchases" element={<Purchases />} />
-          <Route path="/account/purchase-history" element={<Navigate to="/account/purchases" replace />} />
-          {/* points and tier are shown on the account page */}
-          <Route path="/account/membership" element={<Navigate to="/account" replace />} />
-          <Route path="/settings" element={<Settings />} />
-
-          {/* Admin dashboard */}
-          <Route path="/dashboard" element={<Navigate to="/dashboard/inventory" replace />} />
-          <Route path="/dashboard/inventory" element={<ProductDashboard />} />
-          <Route path="/dashboard/fridges" element={<FridgeDashboard />} />
-          <Route path="/dashboard/users" element={<UserRoles />} />
-
-          {/* Old addresses still work */}
-          <Route path="/admin/products" element={<Navigate to="/dashboard/inventory" replace />} />
-          <Route path="/admin/users" element={<Navigate to="/dashboard/users" replace />} />
-          <Route path="/fridges" element={<Navigate to="/dashboard/fridges" replace />} />
-
-          <Route path="/testing" element={<Testing />} />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </ToastProvider>
+      <AppContent />
     </Router>
   );
 }

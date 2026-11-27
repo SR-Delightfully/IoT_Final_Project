@@ -1,10 +1,27 @@
 import { authHeaders } from "./auth";
 
+
 const API = import.meta.env.VITE_API_URL;
 
-// account info, points and purchase history for whoever is logged in
-export async function fetchAccount() {
-  const res = await fetch(`${API}/me/account`, { headers: authHeaders() });
+// account info, points and purchase history for whoever is logged in, optional filtering by date
+export async function fetchAccount(startDate = "", endDate = "") {
+  // Include only the date filters the user selected.
+  const params = new URLSearchParams(); //query parameters
+
+  if (startDate) {
+    params.set("start_date", startDate);
+  }
+
+  if (endDate) {
+    params.set("end_date", endDate);
+  }
+    const queryString = params.toString();
+  let url = `${API}/me/account`;
+
+  if (queryString) {
+    url += `?${queryString}`;
+  }
+  const res = await fetch(url, { headers: authHeaders() });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not load account");
   return data;
@@ -16,6 +33,13 @@ export function formatPrice(cents) {
 
 export function formatDate(timestamp) {
   return timestamp ? timestamp.split(" ")[0] : "";
+}
+// Display the purchase date and time as stored in the database.
+export function formatDateTime(timestamp) {
+  if (!timestamp) return "";
+
+  const [date, time] = timestamp.split(" ");
+  return time ? `${date} @ ${time.slice(0, 5)}` : date;
 }
 
 function csvCell(value) {
@@ -66,4 +90,22 @@ export function downloadPurchasesCsv(purchases) {
   link.download = `purchase-history-${new Date().toLocaleDateString("en-CA")}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+}
+export async function fetchProductHistory(productId, startDate = "", endDate = "") {
+  const params = new URLSearchParams({ product_id: productId });
+
+  if (startDate) params.set("start_date", startDate);
+  if (endDate) params.set("end_date", endDate);
+
+  const res = await fetch(`${API}/me/account/product-history?${params}`, {
+    headers: authHeaders(),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Could not load product history");
+  }
+
+  return data;
 }
