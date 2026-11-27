@@ -1,0 +1,33 @@
+{
+  "name": "advlib-identifier",
+  "homepage": "https://github.com/reelyactive/advlib-identifier/",
+  "author": "reelyActive <webdev@reelyactive.com>",
+  "description": "Library for extracting the wireless device identifier from a transmitted packet.  We believe in an open Internet of Things.",
+  "keywords": [
+    "reelyActive",
+    "BLE",
+    "RFID",
+    "library"
+  ],
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=6.0.0"
+  },
+  "main": "./lib/advlib.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/reelyactive/advlib-identifier.git"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "mocha": "^2.2.5"
+  },
+  "bugs": {
+    "url": "https://github.com/reelyactive/advlib-identifier/issues"
+  },
+  "contributors": [
+    { "name": "Jeffrey Dungen" }
+  ],
+  "license": "MIT"
+}
