@@ -16,8 +16,8 @@ import os
 import re
 import time
 
-me = 'coveyducklucaswork@gmail.com'
-app_password = 'coveyducklucaswork@gmail.com'
+# Same Gmail account as the receipt emails (services/email_credentials.py).
+from services.email_credentials import our_email as me, app_password
 
 BROKER = "10.108.22.132"
 MOTOR_PINS = (22, 27, 17)

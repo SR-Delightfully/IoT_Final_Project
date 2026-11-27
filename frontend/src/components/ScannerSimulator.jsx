@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { authHeaders } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:5050";
 
@@ -54,7 +55,7 @@ function ScannerSimulator() {
 
   const loadCatalog = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/simulate/catalog`);
+      const res = await fetch(`${API}/simulate/catalog`, { headers: authHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not load catalog");
       setCatalog(data);
@@ -89,7 +90,7 @@ function ScannerSimulator() {
     try {
       const res = await fetch(`${API}/simulate/rfid`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ epcs }),
       });
       const data = await res.json();

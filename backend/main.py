@@ -58,7 +58,7 @@ from models.user_model import (
     update_user_name,
     change_password
 )
-from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history
+from models.purchase_model import get_customer_points, get_customer_purchases, get_customer_product_history, get_membership_tiers
 from models.product_model import (
     get_active_products,
     get_all_products,
@@ -486,7 +486,9 @@ class Server(BaseHTTPRequestHandler):
                 "customer": customer,
                 "points": get_customer_points(customer["customer_id"]),
                 "purchases": purchases,
-                "total_spent_cents": total_spent_cents
+                "total_spent_cents": total_spent_cents,
+                # Same tier ladder the database trigger uses for the membership card
+                "tiers": get_membership_tiers()
             })
             return
 
@@ -575,11 +577,12 @@ class Server(BaseHTTPRequestHandler):
 
         # Every notification (fridge alert emails and dashboard alerts): admin only.
         if path == "/notifications":
-            if not self.require_admin():
+            admin = self.require_admin()
+            if not admin:
                 return
 
             try:
-                self.send_json(200, get_all_notifications_detailed())
+                self.send_json(200, get_all_notifications_detailed(admin["user_id"]))
             except sqlite3.Error as error:
                 print(f"Notification fetch error: {error}")
                 self.send_json(500, {"error": "Could not load notifications"})
@@ -1049,10 +1052,6 @@ class Server(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "Alert not found or already resolved"})
             return
 
-        if path == "/checkout/authorize-employee":
-            self.authorize_employee_adjustment()
-            return
-
         if path == "/products":
             self.create_product()
             return
@@ -1147,18 +1146,21 @@ class Server(BaseHTTPRequestHandler):
                 else:
                     receipt["email_status"] = "not_applicable"
 
-                    # Email registered customers after the purchase is saved.
-                    if customer_id is not None:
-                        try:
-                            send_receipt_email(
-                                customer["user_email"],
-                                receipt,
-                                "fr" if data.get("language") == "fr" else "en"
-                            )
-                            receipt["email_status"] = "sent"
-                        except Exception as error:
-                            print(f"Receipt email error: {error}")
-                            receipt["email_status"] = "failed"
+                    # Email the customer linked to this sale (kiosk sign-in,
+                    # new registration or membership card scan), if they have
+                    # an email. Sent in the background so the kiosk doesn't wait on Gmail.
+                    linked = get_customer(receipt["customer_id"]) if receipt.get("customer_id") else None
+                    if linked and linked.get("user_email"):
+                        language = "fr" if data.get("language") == "fr" else "en"
+                        receipt["email_status"] = "sending"
+
+                        def email_receipt(address=linked["user_email"], copy=dict(receipt)):
+                            try:
+                                send_receipt_email(address, copy, language)
+                            except Exception as error:
+                                print(f"Receipt email error: {error}")
+
+                        threading.Thread(target=email_receipt, daemon=True).start()
 
                     self.send_json(201, receipt)
 
@@ -1352,50 +1354,6 @@ class Server(BaseHTTPRequestHandler):
             hardware_feedback(False)
             print(f"Registration error: {error}")
             self.send_json(500, {"error": "Could not add customer"})
-
-    def authorize_employee_adjustment(self):
-        data = self.read_json_or_400()
-        if data is None:
-            return
-
-        employee = self.get_employee_by_id(data.get("employee_id"))
-        if employee is None:
-            self.send_json(403, {"error": "Employee ID not recognized or not authorized"})
-            return
-
-        self.send_json(200, {
-            "authorized": True,
-            "employee": {
-                "user_id": employee["user_id"],
-                "name": f"{employee['user_fname']} {employee['user_lname']}"
-            }
-        })
-
-    @staticmethod
-    def get_employee_by_id(employee_id):
-        if isinstance(employee_id, bool):
-            return None
-
-        try:
-            employee_id = int(str(employee_id).strip())
-        except (TypeError, ValueError):
-            return None
-
-        if employee_id <= 0:
-            return None
-
-        with get_connection() as conn:
-            employee = conn.execute(
-                """
-                SELECT user_id, user_role, user_fname, user_lname
-                FROM Users
-                WHERE user_id = ?
-                  AND user_role IN ('employee', 'admin')
-                """,
-                (employee_id,)
-            ).fetchone()
-
-        return dict(employee) if employee else None
 
     def redeem_loyalty_reward(self):
         user = self.require_user()
@@ -1643,7 +1601,8 @@ class Server(BaseHTTPRequestHandler):
         if os.getenv("SCANNER_SIMULATOR", "1") == "0":
             self.send_json(404, {"error": "Scanner simulator is disabled"})
             return False
-        return True
+        # Only admins can fake RFID / barcode scans
+        return self.require_admin() is not None
 
     def simulate_rfid(self):
         if not self.require_simulator():
@@ -2068,8 +2027,11 @@ def run_server():
 
     try:
         reader = RFIDReader()
-        reader.start(route_tag)
-        print("[INFO] RFID reader initialized.")
+        # start() returns False (and says why) when pyserial is missing
+        if reader.start(route_tag):
+            print("[INFO] RFID reader initialized.")
+        else:
+            print("[INFO] Continuing without RFID hardware.")
     except Exception as error:
         print(f"[WARNING] RFID reader unavailable: {error}")
         print("[INFO] Continuing without RFID hardware.")

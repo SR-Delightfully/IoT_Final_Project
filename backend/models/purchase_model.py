@@ -40,8 +40,8 @@ def get_customer_purchases(customer_id,  start_date=None, end_date=None):
             FROM Purchases p
             LEFT JOIN Receipts r ON r.purchase_id = p.purchase_id
             WHERE p.customer_id = ?
-            AND (? IS NULL OR DATE(p.purchase_created_at) >= ?)
-            AND (? IS NULL OR DATE(p.purchase_created_at) <= ?)
+            AND (? IS NULL OR DATE(p.purchase_created_at, 'localtime') >= ?)
+            AND (? IS NULL OR DATE(p.purchase_created_at, 'localtime') <= ?)
             ORDER BY p.purchase_created_at DESC, p.purchase_id DESC
             """,
             (customer_id, start_date, start_date, end_date, end_date)
@@ -90,8 +90,8 @@ def get_customer_product_history(customer_id, product_id, start_date=None, end_d
             WHERE p.customer_id = ?
               AND pi.product_id = ?
               AND p.purchase_status = 'COMPLETED'
-              AND (? IS NULL OR DATE(p.purchase_created_at) >= ?)
-              AND (? IS NULL OR DATE(p.purchase_created_at) <= ?)
+              AND (? IS NULL OR DATE(p.purchase_created_at, 'localtime') >= ?)
+              AND (? IS NULL OR DATE(p.purchase_created_at, 'localtime') <= ?)
             ORDER BY p.purchase_created_at, p.purchase_id, pi.purchase_item_id
             """,
             (
@@ -99,6 +99,20 @@ def get_customer_product_history(customer_id, product_id, start_date=None, end_d
                 start_date, start_date,
                 end_date, end_date
             )
+        ).fetchall()
+
+        return [dict(row) for row in rows]
+
+
+# Loyalty tiers from lowest to highest, as stored in MembershipTiers.
+def get_membership_tiers():
+    with db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT membership_tier_name AS name, membership_tier_min_points AS min
+            FROM MembershipTiers
+            ORDER BY membership_tier_min_points
+            """
         ).fetchall()
 
         return [dict(row) for row in rows]

@@ -62,7 +62,7 @@ try {
     "success",
     user.user_fname ? t("Welcome back, {name}!", { name: user.user_fname }) : t("Welcome back!")
   );
-  window.location.href = user.user_role === "admin" ? "/dashboard/inventory" : "/account";
+  window.location.href = user.user_role === "admin" ? "/dashboard" : "/customer";
 } catch (error) {
   setLoading(false);
   toast.error(error.message || "Something went wrong. Please try again.");

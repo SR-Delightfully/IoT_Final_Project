@@ -1,4 +1,6 @@
 import { authHeaders } from "./auth";
+import { translate as tr } from "./i18n";
+import { localDateTime } from "./time";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -21,20 +23,20 @@ export async function fetchInventoryReport() {
 // Download the inventory rows currently displayed in the table.
 export function downloadInventoryCsv(products) {
   const rows = [
-    ["Product ID", "Product Name", "Category", "Available Quantity", "Stock Level", "Last Restocked"],
+    [tr("Product ID"), tr("Product Name"), tr("Category"), tr("Available Quantity"), tr("Stock Level"), tr("Last Restocked")],
     ...products.map((p) => [
       p.product_id,
       p.product_name,
-      p.product_category || "Uncategorized",
+      p.product_category || tr("Uncategorized"),
       p.quantity_in_stock,
       p.quantity_in_stock <= 0
-        ? "Out of stock"
+        ? tr("Out of stock")
         : p.quantity_in_stock <= (p.category_low_threshold ?? 5)
-          ? "Low"
+          ? tr("Low")
           : p.quantity_in_stock <= (p.category_moderate_threshold ?? 15)
-            ? "Moderate"
-            : "OK",
-      p.last_restocked || "Never recorded",
+            ? tr("Moderate")
+            : tr("OK"),
+      p.last_restocked ? localDateTime(p.last_restocked) : tr("Never recorded"),
     ]),
   ];
 
@@ -81,19 +83,19 @@ export async function fetchSalesReport(startDate = "", endDate = "") {
 // Export report dates, overall totals and the filtered product quantities.
 export function downloadSalesCsv(report, products, category, salesCents, unitsSold) {
   const rows = [
-    ["Sales Report"],
-    ["Start Date", report.start_date || "No start limit"],
-    ["End Date", report.end_date || "No end limit"],
-    ["Product Category", category || "All categories"],
-    ["Product Sales CAD — Before Tax and Purchase-Level Discounts",
+    [tr("Sales Report")],
+    [tr("Start Date"), report.start_date || tr("No start limit")],
+    [tr("End Date"), report.end_date || tr("No end limit")],
+    [tr("Product Category"), category || tr("All categories")],
+    [tr("Product Sales CAD — Before Tax and Purchase-Level Discounts"),
       (salesCents / 100).toFixed(2)],
-    ["Units Sold — Selected Category", unitsSold],
+    [tr("Units Sold — Selected Category"), unitsSold],
     [],
-    ["Product ID", "Product Name", "Category", "Units Sold"],
+    [tr("Product ID"), tr("Product Name"), tr("Category"), tr("Units Sold")],
     ...products.map((p) => [
       p.product_id,
       p.product_name,
-      p.category_name || "Uncategorized",
+      p.category_name || tr("Uncategorized"),
       p.units_sold,
     ]),
   ];
@@ -124,7 +126,8 @@ export function checkDateFilters(startDate, endDate) {
     ["end-date", endDate],
   ]) {
     const text = document.getElementById(id)?.value ?? "";
-    const typedDate = text === "yyyy-mm-dd" ? "" : text.trim();
+    // No digits typed yet (only the mask letters) counts as an empty date.
+    const typedDate = !/\d/.test(text) ? "" : text.trim();
 
     if (
       typedDate !== selectedDate ||
@@ -168,17 +171,17 @@ export async function fetchCustomerActivity(startDate = "", endDate = "") {
 // Export the customer activity totals and the per-day counts.
 export function downloadCustomerActivityCsv(report) {
   const rows = [
-    ["Customer Activity Report"],
-    ["Start Date", report.start_date],
-    ["End Date", report.end_date],
-    ["Total Customers", report.total_customers],
-    ["New Customers", report.new_customers],
-    ["Returning Customers", report.returning_customers],
-    ["Guest Checkouts", report.guest_checkouts],
-    ["Busiest Day", report.busiest_day?.date ?? "", report.busiest_day?.shoppers ?? ""],
-    ["Quietest Day", report.quietest_day?.date ?? "", report.quietest_day?.shoppers ?? ""],
+    [tr("Customer Activity Report")],
+    [tr("Start Date"), report.start_date],
+    [tr("End Date"), report.end_date],
+    [tr("Total Customers"), report.total_customers],
+    [tr("New Customers"), report.new_customers],
+    [tr("Returning Customers"), report.returning_customers],
+    [tr("Guest Checkouts"), report.guest_checkouts],
+    [tr("Busiest Day"), report.busiest_day?.date ?? "", report.busiest_day?.shoppers ?? ""],
+    [tr("Quietest Day"), report.quietest_day?.date ?? "", report.quietest_day?.shoppers ?? ""],
     [],
-    ["Date", "Customers", "Guest Checkouts", "Shoppers"],
+    [tr("Date"), tr("Customers"), tr("Guest Checkouts"), tr("Shoppers")],
     ...report.daily.map((d) => [d.date, d.customers, d.guests, d.shoppers]),
   ];
 

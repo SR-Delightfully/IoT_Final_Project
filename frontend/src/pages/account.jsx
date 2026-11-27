@@ -10,21 +10,16 @@ import MembershipCard from "../components/MembershipCard";
 import { useI18n } from "../utils/i18n";
 
 
-const TIERS = [
-  { name: "Bronze", min: 0 },
-  { name: "Silver", min: 500 },
-  { name: "Gold", min: 1500 },
-  { name: "Mythic", min: 3000 },
-];
+// Tiers come from the database (MembershipTiers), lowest first.
+function getTierInfo(points, tiers) {
+  const ladder = tiers && tiers.length ? tiers : [{ name: "Iron", min: 0 }];
+  let current = ladder[0];
+  let next = ladder[1] || null;
 
-function getTierInfo(points) {
-  let current = TIERS[0];
-  let next = null;
-
-  for (let i = 0; i < TIERS.length; i++) {
-    if (points >= TIERS[i].min) {
-      current = TIERS[i];
-      next = TIERS[i + 1] || null;
+  for (let i = 0; i < ladder.length; i++) {
+    if (points >= ladder[i].min) {
+      current = ladder[i];
+      next = ladder[i + 1] || null;
     }
   }
 
@@ -57,7 +52,7 @@ function Account() {
     ]) {
       const inputValue = document.getElementById(inputId).value;
       const typedDate =
-        inputValue === "yyyy-mm-dd" || inputValue.trim() === ""
+        !/\d/.test(inputValue)
           ? ""
           : inputValue;
 
@@ -106,7 +101,7 @@ function Account() {
 
   const { customer, purchases } = account;
   const points = account.points || 0;
-  const { current, next, progress } = getTierInfo(points);
+  const { current, next, progress } = getTierInfo(points, account.tiers);
 
   // Use the spending total calculated by the backend.
   const totalSpent = account.total_spent_cents;
@@ -116,7 +111,7 @@ function Account() {
       <div className="account-card">
         <div className="account-card-body">
           <a
-            href="/settings"
+            href="/customer/settings"
             className="account-button account-settings-button"
           >
             {t("Settings")}
@@ -253,7 +248,7 @@ function Account() {
 
             {purchases.length > 0 && (
               <div className="history-actions">
-                <a href="/account/purchases" className="account-button">
+                <a href="/customer/purchases" className="account-button">
                   {t("See all purchases")}
                 </a>
                 <button

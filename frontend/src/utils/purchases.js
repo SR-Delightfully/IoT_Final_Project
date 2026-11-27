@@ -1,5 +1,6 @@
 import { authHeaders } from "./auth";
-import { currentLang, localeFor } from "./i18n";
+import { currentLang, localeFor, translate } from "./i18n";
+import { localDate, localDateTime } from "./time";
 
 
 const API = import.meta.env.VITE_API_URL;
@@ -36,15 +37,13 @@ export function formatPrice(cents) {
   }).format((cents || 0) / 100);
 }
 
+// Database times are UTC; show them in the store's local time.
 export function formatDate(timestamp) {
-  return timestamp ? timestamp.split(" ")[0] : "";
+  return localDate(timestamp);
 }
-// Display the purchase date and time as stored in the database.
-export function formatDateTime(timestamp) {
-  if (!timestamp) return "";
 
-  const [date, time] = timestamp.split(" ");
-  return time ? `${date} @ ${time.slice(0, 5)}` : date;
+export function formatDateTime(timestamp) {
+  return localDateTime(timestamp);
 }
 
 function csvCell(value) {
@@ -63,12 +62,12 @@ export function downloadPurchasesCsv(purchases) {
     "Unit Price",
     "Purchase Total",
     "Points Earned",
-  ];
+  ].map((label) => translate(label));
 
   const rows = [];
 
   for (const p of purchases) {
-    const base = [p.receipt_number, formatDate(p.purchase_created_at), p.purchase_payment_status];
+    const base = [p.receipt_number, formatDate(p.purchase_created_at), translate(p.purchase_payment_status)];
     const tail = [formatPrice(p.purchase_total), p.purchase_points_earned];
 
     if (p.items.length === 0) {

@@ -25,6 +25,8 @@ function NavBar({ themePrefs, onThemeChange }) {
     const { t, lang, setLang } = useI18n();
     const [user, setUser] = useState(readUser);
     const [accountOpen, setAccountOpen] = useState(false);
+    // Phone-size menu (the links collapse behind a button under 768px)
+    const [menuOpen, setMenuOpen] = useState(false);
     const { pathname } = useLocation();
     const accountRef = useRef(null);
 
@@ -92,7 +94,6 @@ function NavBar({ themePrefs, onThemeChange }) {
         </a>
     );
 
-    const isemployee = ["employee", "admin"].includes(user?.user_role);
     const isAdmin = user?.user_role === "admin";
 
     const firstName = user?.user_fname
@@ -104,7 +105,7 @@ function NavBar({ themePrefs, onThemeChange }) {
         : "";
 
     return (
-        <header className="nav-container">
+        <header className={`nav-container ${menuOpen ? "nav-menu-open" : ""}`}>
 
             <nav className="nav-bar nav-primary">
                 <a href="/home" className="nav-brand">
@@ -130,6 +131,16 @@ function NavBar({ themePrefs, onThemeChange }) {
                     <ThemeMenu prefs={themePrefs} onChange={onThemeChange} t={t} />
                     {user && <NotificationBell />}
                 </div>
+
+                <button
+                    type="button"
+                    className="nav-menu-toggle"
+                    aria-expanded={menuOpen}
+                    aria-label={menuOpen ? t("Close menu") : t("Open menu")}
+                    onClick={() => setMenuOpen((open) => !open)}
+                >
+                    <span aria-hidden="true">{menuOpen ? "✕" : "☰"}</span>
+                </button>
 
                 <div className="nav-user">
                     {user ? (
@@ -175,18 +186,16 @@ function NavBar({ themePrefs, onThemeChange }) {
                 </div>
             </nav>
 
-            {isemployee && (
+            {isAdmin && (
                 <nav className="nav-bar nav-secondary">
-                    <span className="nav-label">
-                        {isAdmin ? t("Admin Mode") : t("Employee Mode")}
-                    </span>
+                    <span className="nav-label">{t("Admin Mode")}</span>
 
                     <div className="nav-links">
                         {link("/dashboard", t("Overview"))}
                         {link("/dashboard/inventory", t("Inventory"))}
-                        {isAdmin && link("/dashboard/reports", t("Reports"))}
+                        {link("/dashboard/reports", t("Reports"))}
                         {link("/dashboard/fridges", t("Fridges"))}
-                        {isAdmin && link("/dashboard/users", t("Users"))}
+                        {link("/dashboard/users", t("Users"))}
                     </div>
                 </nav>
             )}

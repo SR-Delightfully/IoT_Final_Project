@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { currentLang, localeFor, translate, useI18n } from "../utils/i18n";
+import { parseDbTime } from "../utils/time";
 
   import { useToast } from "../components/Toaster";
 
@@ -88,10 +89,10 @@ import { currentLang, localeFor, translate, useI18n } from "../utils/i18n";
       const refreshInProgress = useRef(false);
       const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
       const statusLabel = sessionStatus === "ACTIVE"
-          ? "READER SESSION ACTIVE"
+          ? t("READER SESSION ACTIVE")
           : sessionStatus === "ERROR"
-              ? "SERVER UNAVAILABLE"
-              : "READER READY";
+              ? t("SERVER UNAVAILABLE")
+              : t("READER READY");
       const notifyError = (message) => {
           if (message) toast.error(message);
       };
@@ -404,7 +405,7 @@ import { currentLang, localeFor, translate, useI18n } from "../utils/i18n";
               setReceipt({
                   number: data.receipt_number || sessionId,
                   date: data.receipt_created_at
-                      ? new Date(data.receipt_created_at).toLocaleString(language === "fr" ? "fr-CA" : "en-CA")
+                      ? parseDbTime(data.receipt_created_at).toLocaleString(language === "fr" ? "fr-CA" : "en-CA")
                       : new Date().toLocaleString(language === "fr" ? "fr-CA" : "en-CA"),
                   items: receiptItems,
                   totals: {
@@ -456,7 +457,7 @@ import { currentLang, localeFor, translate, useI18n } from "../utils/i18n";
                       </div>
                       <span>
                           <p className="brand-kicker">SMART TCG STORE</p>
-                        <p className="brand-register">REGISTER / 01</p>
+                        <p className="brand-register">{t("REGISTER / 01")}</p>
                       </span>
                   </div>
               </header>

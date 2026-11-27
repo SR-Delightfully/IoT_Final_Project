@@ -306,9 +306,9 @@ function Registration() {
                   required
                 />
 
-                <p>
+                <label htmlFor="tos" className="terms-label">
                   {t("I agree to the Terms of Service")}
-                </p>
+                </label>
               </span>
 
               <input

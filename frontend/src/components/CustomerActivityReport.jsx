@@ -29,9 +29,9 @@ const TOOLTIP_STYLE = {
     itemStyle: { color: "white" },
 };
 
-function formatDay(day) {
+function formatDay(day, locale) {
     if (!day) return "—";
-    return new Date(`${day.date}T00:00:00`).toLocaleDateString(undefined, {
+    return new Date(`${day.date}T00:00:00`).toLocaleDateString(locale, {
         weekday: "short",
         year: "numeric",
         month: "short",
@@ -50,7 +50,7 @@ function Stat({ label, value, detail }) {
 }
 
 function CustomerActivityReport() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
     const [report, setReport] = useState(null);
     const [error, setError] = useState("");
     const [startDate, setStartDate] = useState("");
@@ -167,12 +167,12 @@ function CustomerActivityReport() {
                         <div className="points-summary">
                             <Stat
                                 label={t("Most crowded day")}
-                                value={formatDay(report.busiest_day)}
+                                value={formatDay(report.busiest_day, locale)}
                                 detail={t("{0} shopper(s)", { 0: report.busiest_day?.shoppers ?? 0 })}
                             />
                             <Stat
                                 label={t("Least crowded day")}
-                                value={formatDay(report.quietest_day)}
+                                value={formatDay(report.quietest_day, locale)}
                                 detail={t("{0} shopper(s)", { 0: report.quietest_day?.shoppers ?? 0 })}
                             />
                         </div>

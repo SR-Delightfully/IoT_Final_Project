@@ -34,8 +34,8 @@ def get_sales_total(start_date=None, end_date=None):
             SELECT SUM(purchase_total_cents) AS total_sales_cents
             FROM Purchases
             WHERE purchase_status = 'COMPLETED'
-              AND (? IS NULL OR DATE(purchase_created_at) >= ?)
-              AND (? IS NULL OR DATE(purchase_created_at) <= ?)
+              AND (? IS NULL OR DATE(purchase_created_at, 'localtime') >= ?)
+              AND (? IS NULL OR DATE(purchase_created_at, 'localtime') <= ?)
             """,
             (start_date, start_date, end_date, end_date)
         ).fetchone()
@@ -60,8 +60,8 @@ def get_product_sales(start_date=None, end_date=None):
                 FROM PurchaseItems pi
                 JOIN Purchases pu ON pu.purchase_id = pi.purchase_id
                 WHERE pu.purchase_status = 'COMPLETED'
-                  AND (? IS NULL OR DATE(pu.purchase_created_at) >= ?)
-                  AND (? IS NULL OR DATE(pu.purchase_created_at) <= ?)
+                  AND (? IS NULL OR DATE(pu.purchase_created_at, 'localtime') >= ?)
+                  AND (? IS NULL OR DATE(pu.purchase_created_at, 'localtime') <= ?)
                 GROUP BY pi.product_id
             ) s ON s.product_id = p.product_id
             WHERE p.product_is_active = 1 OR s.units_sold > 0
@@ -84,7 +84,7 @@ def get_daily_sales(start_date=None, end_date=None):
         rows = conn.execute(
             """
             SELECT
-                DATE(pu.purchase_created_at) AS sale_date,
+                DATE(pu.purchase_created_at, 'localtime') AS sale_date,
                 c.category_name,
                 SUM(
                     pi.purchase_item_quantity *
@@ -95,9 +95,9 @@ def get_daily_sales(start_date=None, end_date=None):
             JOIN Products p ON p.product_id = pi.product_id
             LEFT JOIN Categories c ON c.category_id = p.category_id
             WHERE pu.purchase_status = 'COMPLETED'
-              AND (? IS NULL OR DATE(pu.purchase_created_at) >= ?)
-              AND (? IS NULL OR DATE(pu.purchase_created_at) <= ?)
-            GROUP BY DATE(pu.purchase_created_at), c.category_id
+              AND (? IS NULL OR DATE(pu.purchase_created_at, 'localtime') >= ?)
+              AND (? IS NULL OR DATE(pu.purchase_created_at, 'localtime') <= ?)
+            GROUP BY DATE(pu.purchase_created_at, 'localtime'), c.category_id
             ORDER BY sale_date, c.category_name
             """,
             (start_date, start_date, end_date, end_date)
@@ -115,8 +115,8 @@ def get_customer_activity(start_date=None, end_date=None):
     with db_connection() as conn:
         bounds = conn.execute(
             """
-            SELECT MIN(DATE(purchase_created_at)) AS first_day,
-                   MAX(DATE(purchase_created_at)) AS last_day
+            SELECT MIN(DATE(purchase_created_at, 'localtime')) AS first_day,
+                   MAX(DATE(purchase_created_at, 'localtime')) AS last_day
             FROM Purchases
             WHERE purchase_status = 'COMPLETED'
             """
@@ -128,18 +128,18 @@ def get_customer_activity(start_date=None, end_date=None):
 
         purchases = conn.execute(
             """
-            SELECT DATE(pu.purchase_created_at) AS day,
+            SELECT DATE(pu.purchase_created_at, 'localtime') AS day,
                    pu.customer_id,
                    first.first_day
             FROM Purchases pu
             LEFT JOIN (
-                SELECT customer_id, MIN(DATE(purchase_created_at)) AS first_day
+                SELECT customer_id, MIN(DATE(purchase_created_at, 'localtime')) AS first_day
                 FROM Purchases
                 WHERE purchase_status = 'COMPLETED' AND customer_id IS NOT NULL
                 GROUP BY customer_id
             ) first ON first.customer_id = pu.customer_id
             WHERE pu.purchase_status = 'COMPLETED'
-              AND DATE(pu.purchase_created_at) BETWEEN ? AND ?
+              AND DATE(pu.purchase_created_at, 'localtime') BETWEEN ? AND ?
             """,
             (start, end)
         ).fetchall()

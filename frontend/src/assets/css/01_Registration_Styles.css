@@ -244,3 +244,24 @@ label {
   filter: hue-rotate(308deg) contrast(1.7) brightness(0.7)
     drop-shadow(0 0.5rem 0.5rem black);
 }
+
+/* Heading + hint inside register/login labels: normal line height so a hint
+   that wraps onto two lines doesn't overlap the heading above it. */
+#customer-registration label.form-label,
+#customer-login label.form-label {
+  display: block;
+  line-height: 1.2;
+  margin-bottom: 0.35rem;
+}
+
+#customer-registration label.form-label h2,
+#customer-login label.form-label h2 {
+  margin: 0 0 0.15rem;
+  line-height: 1.2;
+}
+
+#customer-registration label.form-label h5,
+#customer-login label.form-label h5 {
+  margin: 0;
+  line-height: 1.25;
+}

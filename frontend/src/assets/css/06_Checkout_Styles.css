@@ -2552,3 +2552,48 @@ main.self-checkout {
   flex: 1;
   width: auto;
 }
+
+/* Signed-in member summary on the loyalty step */
+.loyalty-account-card {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--gold-4);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.loyalty-account-details,
+.loyalty-account-points {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.loyalty-account-points {
+  text-align: right;
+}
+
+.loyalty-account-label,
+.loyalty-account-points span {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: var(--gold-5);
+}
+
+.loyalty-account-details strong {
+  font-size: 1.05rem;
+  color: var(--tone-9);
+}
+
+.loyalty-account-details span:last-child {
+  font-size: 0.8rem;
+  color: var(--tone-8);
+}
+
+.loyalty-account-points strong {
+  font-size: 1.6rem;
+  color: var(--gold-7);
+}

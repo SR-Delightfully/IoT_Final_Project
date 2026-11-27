@@ -4,6 +4,7 @@ import EnvironmentSensor from "../components/EnvironmentSensor";
 import { useToast } from "../components/Toaster";
 import Header from "../layout/header";
 import { authHeaders } from "../utils/auth";
+import { parseDbTime } from "../utils/time";
 import { useI18n } from "../utils/i18n";
 
 const API = "http://localhost:5050";
@@ -37,7 +38,7 @@ function Stat({ label, value, detail, status = "" }) {
 }
 
 function AlertCenter({ alerts, onAcknowledge, busyIds }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const activeAlerts = alerts.filter(
     (alert) =>
       !["acknowledged", "resolved", "closed"].includes(
@@ -67,11 +68,11 @@ function AlertCenter({ alerts, onAcknowledge, busyIds }) {
                 <span>
                   {alert.fridge_name || t("Fridge {0}", { 0: alert.fridge_id })}
                   {alert.alert_value != null && t(" · Value: {0}", { 0: alert.alert_value })}
-                  {alert.alert_condition && ` · ${alert.alert_condition}`}
+                  {alert.alert_condition && ` · ${t(CONDITION_LABELS[alert.alert_condition] || alert.alert_condition)}`}
                 </span>
                 <time>
                   {alert.alert_created_at
-                    ? new Date(alert.alert_created_at).toLocaleString()
+                    ? parseDbTime(alert.alert_created_at).toLocaleString(locale)
                     : t("Time unavailable")}
                 </time>
               </div>
@@ -91,8 +92,13 @@ function AlertCenter({ alerts, onAcknowledge, busyIds }) {
   );
 }
 
+// Readable names for the condition codes mqttProj stores on an alert
+const CONDITION_LABELS = { ABOVE_MAX: "Above maximum", BELOW_MIN: "Below minimum" };
+const STATUS_LABELS = { PENDING: "Pending", SENT: "Sent", READ: "Read", FAILED: "Failed" };
+const NOTIFICATION_TYPES = { ALERT: "Dashboard alert", EMAIL: "Alert email", SYSTEM: "System" };
+
 function NotificationCenter({ notifications, onRead, busyIds }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const unread = notifications.filter(
     (notification) =>
       !notification.notification_read_at &&
@@ -112,7 +118,7 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
       </header>
 
       {notifications.length === 0 ? (
-        <p className="dashboard-empty">{t("No notifications returned by the API.")}</p>
+        <p className="dashboard-empty">{t("No fridge alert notifications yet.")}</p>
       ) : (
         <div className="dashboard-list">
           {notifications.map((notification) => {
@@ -128,20 +134,18 @@ function NotificationCenter({ notifications, onRead, busyIds }) {
                 <span className="dashboard-notification-indicator" />
                 <div className="dashboard-list-content">
                   <strong>
-                    {notification.notification_title || notification.notification_type || t("Notification")}
-                    {notification.notification_type && ` · ${notification.notification_type}`}
+                    {notification.fridge_name || t("Fridge alert")}
+                    {" · "}
+                    {t(NOTIFICATION_TYPES[notification.notification_type] || "Notification")}
                   </strong>
+                  <span>{t(notification.alert_message || notification.notification_message_brief)}</span>
                   <span>
-                    {t(notification.alert_message) ||
-                      t(notification.message) ||
-                      t("Alert #{0}", { 0: notification.alert_id ?? "—" })}
-                  </span>
-                  <span>
-                    {t("Status:")} {notification.notification_status || t("unknown")}
+                    {notification.notification_type === "EMAIL" && notification.user_email
+                      ? `${notification.user_email} · `
+                      : ""}
+                    {t(STATUS_LABELS[notification.notification_status] || "unknown")}
                     {notification.notification_sent_at &&
-                      t(" · Sent {0}", { 0: new Date(
-                        notification.notification_sent_at
-                      ).toLocaleString() })}
+                      ` · ${parseDbTime(notification.notification_sent_at).toLocaleString(locale)}`}
                   </span>
                 </div>
                 {isUnread && (

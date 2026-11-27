@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatPrice as formatLocalPrice } from "../utils/purchases";
 import { useI18n } from "../utils/i18n";
+import ProductImage from "../components/ProductImage";
 
 function formatPrice(cents) {
   return formatLocalPrice(cents);
@@ -8,28 +9,6 @@ function formatPrice(cents) {
 
 // product photo, or the first letter of the name if there is no photo
 // or the link is broken
-function ProductImage({ product, className = "" }) {
-  const [broken, setBroken] = useState(false);
-
-  if (!product.product_image_url || broken) {
-    return (
-      <div className={`product-image product-image-empty ${className}`}>
-        {product.product_name.charAt(0)}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      className={`product-image ${className}`}
-      src={product.product_image_url}
-      alt={product.product_name}
-      loading="lazy"
-      onError={() => setBroken(true)}
-    />
-  );
-}
-
 function Products() {
   const { t } = useI18n();
   const [products, setProducts] = useState(null);

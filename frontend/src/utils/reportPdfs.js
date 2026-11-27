@@ -1,5 +1,6 @@
 import { currentLang, localeFor, translate } from "./i18n";
 import { exportReportPdf } from "./pdf";
+import { localDateTime } from "./time";
 
 // PDF versions of the admin reports and the customer's purchase history.
 // Text follows the language picked on the site.
@@ -61,7 +62,7 @@ export function downloadInventoryPdf(products, { category = "", search = "" } = 
           p.product_category || t("Uncategorized"),
           p.quantity_in_stock,
           stockLevelLabel(p, t),
-          p.last_restocked || t("Never recorded"),
+          p.last_restocked ? localDateTime(p.last_restocked) : t("Never recorded"),
         ]),
       },
     ],
@@ -156,7 +157,7 @@ export function downloadPurchaseHistoryPdf(purchases, { startDate, endDate, char
         head: [t("Receipt"), t("Date"), t("Items"), t("Points"), t("Total")],
         body: purchases.map((p) => [
           p.receipt_number,
-          p.purchase_created_at,
+          localDateTime(p.purchase_created_at),
           p.items.map((i) => `${i.purchase_item_name} x${i.purchase_item_quantity}`).join("\n"),
           p.purchase_points_earned,
           money(p.purchase_total),
@@ -172,7 +173,7 @@ export function downloadReceiptPdf(purchase) {
   return exportReportPdf({
     lang,
     title: t("Receipt {number}", { number: purchase.receipt_number }),
-    subtitle: purchase.purchase_created_at,
+    subtitle: localDateTime(purchase.purchase_created_at),
     filename: `receipt-${purchase.receipt_number}.pdf`,
     summary: [
       [t("Total"), money(purchase.purchase_total)],

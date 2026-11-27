@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatPrice as formatLocalPrice } from "../utils/purchases";
+import { localDateTime as formatLocalDateTime } from "../utils/time";
 import { useToast } from "../components/Toaster";
 import { authHeaders } from "../utils/auth";
 import { downloadInventoryCsv } from "../utils/reports";
@@ -520,10 +521,14 @@ function ProductDashboard() {
     if (mode === "receive" && !receiving) upcRef.current?.focus();
   }, [mode, receiving, products]);
 
-  const replaceProduct = (updated) =>
+  const replaceProduct = (updated) => {
     setProducts((list) =>
       list.map((p) => (p.product_id === updated.product_id ? updated : p)),
     );
+    setReceiving((current) =>
+      current && current.product_id === updated.product_id ? { ...current, ...updated } : current,
+    );
+  };
 
   const succeed = (text) => toast.success(text);
 
@@ -566,7 +571,7 @@ function ProductDashboard() {
         { epcs, supplier },
       );
       replaceProduct(updated);
-      succeed(`Received ${updated.received} × ${updated.product_name}.`);
+      succeed(t("Received {count} × {name}.", { count: updated.received, name: updated.product_name }));
       await switchMode("receive");
     } catch (err) {
       handleError(err);
@@ -598,7 +603,7 @@ function ProductDashboard() {
       });
       setProducts((list) => [...list, created]);
       setNewProduct(EMPTY_FORM);
-      succeed(`Added ${created.product_name} with ${created.quantity_in_stock} in stock.`);
+      succeed(t("Added {name} with {count} in stock.", { name: created.product_name, count: created.quantity_in_stock }));
       await resetBatch();
       loadProducts();
     } catch (err) {
@@ -621,7 +626,7 @@ function ProductDashboard() {
       );
       replaceProduct(updated);
       setEditingId(null);
-      succeed(`Saved ${updated.product_name}.`);
+      succeed(t("Saved {name}.", { name: updated.product_name }));
       loadProducts();
     } catch (err) {
       handleError(err);
@@ -634,7 +639,9 @@ function ProductDashboard() {
         active: !p.product_active,
       });
       replaceProduct(updated);
-      succeed(`${updated.product_name} is now ${updated.product_active ? "visible" : "hidden"}.`);
+      succeed(
+        t(updated.product_active ? "{name} is now visible." : "{name} is now hidden.", { name: updated.product_name })
+      );
     } catch (err) {
       handleError(err);
     }
@@ -813,6 +820,20 @@ function ProductDashboard() {
                         {t("Change product")}
                       </button>
                     </div>
+                    {!receiving.product_active && (
+                      <div className="hidden-product-warning" role="status">
+                        <span>
+                          {t("This product is hidden from the storefront. Received stock won't be for sale until it's visible.")}
+                        </span>
+                        <button
+                          type="button"
+                          className="dashboard-btn-small"
+                          onClick={() => toggleActive(receiving)}
+                        >
+                          {t("Make visible")}
+                        </button>
+                      </div>
+                    )}
                     <ScanPanel tagScan={tagScan} supplier={supplier} onSupplierChange={setSupplier} />
                     <div className="dashboard-form-actions">
                       <button
@@ -965,7 +986,7 @@ function ProductDashboard() {
                                 {p.quantity_in_stock}
                               </span>
                             </td>
-                            <td>{p.last_restocked || t("Never recorded")}</td>
+                            <td>{p.last_restocked ? formatLocalDateTime(p.last_restocked) : t("Never recorded")}</td>
                             <td>{p.total_sold}</td>
                             <td>
                               <button

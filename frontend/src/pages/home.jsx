@@ -1,67 +1,82 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import ProductImage from "../components/ProductImage";
 import { useI18n } from "../utils/i18n";
+import { formatPrice } from "../utils/purchases";
 
-function Registration() {
+const API = import.meta.env.VITE_API_URL;
+const FEATURED_COUNT = 4;
+
+// Store landing page: welcome, the three main actions, and a few products.
+function Home() {
   const { t } = useI18n();
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
+  const [featured, setFeatured] = useState(null);
+  const loggedIn = Boolean(localStorage.getItem("token"));
 
-  //   const formData = new FormData(e.target);
-  //   const userData = {
-  //     fname: formData.get("fname"),
-  //     lname: formData.get("lname"),
-  //   };
-
-  //   const userData = ["fname", "lname"];
-  // }
+  useEffect(() => {
+    fetch(`${API}/products`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((products) =>
+        // Best-stocked products first, so the featured ones can be bought today.
+        setFeatured(
+          [...products]
+            .filter((p) => p.quantity_in_stock > 0)
+            .sort((a, b) => b.quantity_in_stock - a.quantity_in_stock)
+            .slice(0, FEATURED_COUNT)
+        )
+      )
+      .catch(() => setFeatured([]));
+  }, []);
 
   return (
     <main className="home-page">
-      <div className="home-card">
-        <div className="home-card-body">
-          <h1 className="home-title">
-            {t("Our Community")}
-          </h1>
+      <section className="home-hero">
+        <span className="home-eyebrow">{t("Smart TCG Store")}</span>
+        <h1 className="home-title">{t("Welcome to TCG:GO")}</h1>
+        <p className="home-subtitle">
+          <i>{t("Cards, sealed product and accessories, with a self-checkout that scans your whole basket at once.")}</i>
+        </p>
 
-          <p className="home-subtitle">
-           <i> {t("share us with your friends to get 10% off your first purchase!")}</i>
-          </p>
-
-          <div className="customer-list">
-            <div className="customer-card">
-              <div id="customer-pfp" /> {/* to be changed for an img tag later */}
-              <h3 className="customer-name">{t("John Doe")}</h3>
-              <span className="customer-doc">
-                <h4 className="doc-title">{t("Date Joined:")}</h4>
-                <p className="date">2026-09-23</p> 
-              </span>
-            </div>
-          </div>
-
+        <div className="home-actions">
+          <a className="home-action home-action-primary" href="/products">
+            {t("Browse products")}
+          </a>
+          <a className="home-action" href="/self-checkout">
+            {t("Go to self-checkout")}
+          </a>
+          <a className="home-action" href={loggedIn ? "/customer" : "/register"}>
+            {loggedIn ? t("My loyalty points") : t("Join the loyalty program")}
+          </a>
         </div>
-      </div>
+
+        <ul className="home-perks">
+          <li>{t("1 point for every $1 spent")}</li>
+          <li>{t("Receipts emailed to members")}</li>
+          <li>{t("Scan your membership card at checkout")}</li>
+        </ul>
+      </section>
+
+      {featured && featured.length > 0 && (
+        <section className="home-featured">
+          <h2 className="home-section-title">{t("Featured products")}</h2>
+          <div className="home-featured-grid">
+            {featured.map((p) => (
+              <a key={p.product_id} className="product-tile home-product" href="/products">
+                <ProductImage product={p} />
+                <h3 className="product-name">{p.product_name}</h3>
+                <span className="product-category">{t(p.product_category || "Uncategorized")}</span>
+                <div className="product-footer">
+                  <span className="product-price">{formatPrice(p.product_price_cents)}</span>
+                  <span className="product-stock">
+                    {t("{0} in stock", { 0: p.quantity_in_stock })}
+                  </span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </main>
   );
 }
 
-// const createCustomer = async () => {
-//   try {
-//     const res = await fetch('https://localhost:5173/', {
-//       method: 'POST',
-//       headers: {
-//         'Content-Type': 'application/json',
-//       },
-//       body: JSON.stringify({
-//         title: 'user',
-//         body: '',
-//         userId: 1
-//       }),
-//     });
-//     const customerData = await res.json();
-//     console.log('POST response:', customerData);
-//   } catch (error) {
-//     console.error('Error creating customer:', error);
-//   }
-// };
-
-export default Registration;
+export default Home;

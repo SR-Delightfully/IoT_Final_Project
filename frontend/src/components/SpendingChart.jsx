@@ -6,7 +6,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { formatPrice } from "../utils/purchases";
+import { formatDate, formatPrice } from "../utils/purchases";
 import { useI18n } from "../utils/i18n";
 
 function SpendingChart({ purchases }) {
@@ -17,7 +17,7 @@ function SpendingChart({ purchases }) {
   for (const purchase of purchases) {
     if (purchase.purchase_payment_status !== "paid") continue;
 
-    const day = purchase.purchase_created_at.split(" ")[0];
+    const day = formatDate(purchase.purchase_created_at);
     dailyTotals[day] =
       (dailyTotals[day] || 0) + purchase.purchase_total;
   }

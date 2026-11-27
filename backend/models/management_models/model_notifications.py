@@ -41,8 +41,10 @@ def update_notification(notification_id, values):
 def delete_notification(notification_id):
     return delete_record(TABLE, PRIMARY_KEY, notification_id)
 
-def get_all_notifications_detailed():
-    """Every notification, newest first, with its alert message and fridge."""
+def get_all_notifications_detailed(user_id):
+    """Fridge-alert notifications for the fridge page, newest first: this admin's
+    own dashboard alerts (the same rows as their bell) plus every alert email.
+    Purchase confirmations and low-stock notices only go to the bell."""
     with db_connection() as conn:
         rows = conn.execute(
             """
@@ -56,9 +58,13 @@ def get_all_notifications_detailed():
             LEFT JOIN Readings ON Readings.reading_id = Alerts.reading_id
             LEFT JOIN Fridges ON Fridges.fridge_id = Readings.fridge_id
             LEFT JOIN Users ON Users.user_id = Notifications.user_id
+            WHERE Notifications.alert_id IS NOT NULL
+              AND (Notifications.notification_type = 'EMAIL'
+                   OR Notifications.user_id = ?)
             ORDER BY Notifications.notification_created_at DESC,
                      Notifications.notification_id DESC
-            """
+            """,
+            (user_id,)
         ).fetchall()
 
         return [dict(row) for row in rows]

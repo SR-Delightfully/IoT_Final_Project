@@ -37,8 +37,9 @@ import { LanguageProvider } from "./utils/i18n";
 import { useTheme } from "./utils/theme";
 import ScannerSimulator from "./components/ScannerSimulator";
 
-const SHOW_SCANNER_SIMULATOR = import.meta.env.VITE_SCANNER_SIMULATOR !== "false";
-import UserDashboard from "./pages/userDashboard";
+// Testing tool for demos without the RFID / barcode hardware: admins only,
+// and only while VITE_SCANNER_SIMULATOR isn't "false".
+const SIMULATOR_ENABLED = import.meta.env.VITE_SCANNER_SIMULATOR !== "false";
 
 function AppContent() {
   const location = useLocation();
@@ -76,12 +77,12 @@ function AppContent() {
         <Route path="/dashboard/inventory" element={<ProductDashboard />} />
         <Route path="/dashboard/reports" element={<Reports />} />
         <Route path="/dashboard/fridges" element={<FridgeDashboard />} />
-        <Route path="/dashboard/users" element={<UserDashboard />} />
+        <Route path="/dashboard/users" element={<UserRoles />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
-      {SHOW_SCANNER_SIMULATOR && <ScannerSimulator />}
+      {SIMULATOR_ENABLED && localStorage.getItem("user_role") === "admin" && <ScannerSimulator />}
     </ToastProvider>
   );
 }

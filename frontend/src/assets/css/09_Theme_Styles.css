@@ -448,3 +448,128 @@
 .purchase-receipt-pdf:hover {
   background: color-mix(in srgb, var(--gold-6) 15%, transparent);
 }
+
+/* ---------- Phone-size navbar (hamburger menu) ---------- */
+.nav-menu-toggle {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .nav-primary.nav-bar {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+  }
+
+  .nav-primary .nav-brand {
+    min-width: 0;
+    padding-left: 0;
+    font-size: 1.35rem;
+    order: 0;
+  }
+
+  .nav-primary .nav-tools {
+    order: 1;
+    margin: 0 0 0 auto;
+  }
+
+  .nav-menu-toggle {
+    order: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.3rem;
+    height: 2.3rem;
+    border: 1px solid var(--gold-4);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--gold-7);
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+
+  /* Links and account collapse behind the menu button */
+  .nav-primary .nav-links,
+  .nav-primary .nav-user {
+    display: none;
+    order: 3;
+    width: 100%;
+    margin: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .nav-menu-open .nav-primary .nav-links,
+  .nav-menu-open .nav-primary .nav-user {
+    display: flex;
+  }
+
+  .nav-menu-open .nav-primary .nav-user {
+    order: 4;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--blue-4);
+  }
+
+  .nav-primary .nav-links .nav-link,
+  .nav-primary .nav-user > .nav-link {
+    padding: 0.6rem 0.25rem;
+  }
+
+  .nav-primary .nav-account-dropdown {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-primary .nav-dropdown-menu {
+    position: static;
+    width: 100%;
+    box-shadow: none;
+  }
+
+  /* Admin bar: one row that scrolls sideways */
+  .nav-secondary.nav-bar {
+    height: auto;
+    margin: 0;
+    padding: 0.35rem 0.75rem !important;
+    gap: 0.75rem;
+  }
+
+  .nav-secondary::before {
+    display: none;
+  }
+
+  .nav-secondary .nav-label {
+    min-width: 0;
+    padding-left: 0;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  .nav-secondary .nav-links {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .nav-secondary .nav-link {
+    padding: 0.4rem 0.6rem;
+  }
+
+  .nav-popover {
+    position: fixed;
+    top: 3.5rem;
+    left: 0.75rem;
+    right: 0.75rem;
+    min-width: 0;
+    width: auto;
+  }
+}
+
+/* "Admin Mode" label: the dark theme's pale blue is unreadable on the light gold bar */
+[data-theme="light"] .nav-label {
+  color: var(--blue-9);
+  text-shadow: none;
+}

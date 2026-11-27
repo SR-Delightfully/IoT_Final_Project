@@ -39,7 +39,8 @@ function Purchases() {
       ["end-date", endDate],
     ]) {
       const inputValue = document.getElementById(inputId).value;
-      const typedDate = inputValue === "yyyy-mm-dd" || inputValue.trim() === "" ? "" : inputValue;
+      // No digits typed yet (only the mask letters) counts as an empty date.
+      const typedDate = !/\d/.test(inputValue) ? "" : inputValue;
 
       if (
         (typedDate && !/^\d{4}-\d{2}-\d{2}$/.test(typedDate)) ||
@@ -211,7 +212,7 @@ function Purchases() {
       </div>
 
       <div className="account-links">
-        <a href="/account">{t("Back to account")}</a>
+        <a href="/customer">{t("Back to account")}</a>
       </div>
     </main >
   );
