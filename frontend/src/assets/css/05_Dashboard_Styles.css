@@ -2,6 +2,66 @@ html {
   min-height: 100%;
 }
 
+/* The fridge panel itself should never scroll */
+.dashboard-page > #fridges {
+    display: flex;
+    flex-direction: column;
+
+    min-height: 0;
+    height: 100%;
+    min-width: 0;
+
+    overflow: hidden;
+}
+
+/* Only the fridge cards container scrolls */
+.dashboard-page > #fridges .fridge-grid {
+    display: grid;
+
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* Let every row be generated automatically */
+    grid-template-rows: none;
+    grid-auto-rows: minmax(25rem, max-content);
+
+    align-content: start;
+    align-items: start;
+
+    gap: 0.55rem;
+
+    /* Important for nested scrolling */
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+
+    padding-right: 0.4rem;
+}
+
+/* Individual fridge cards */
+.dashboard-page > #fridges .fridge-grid > .fridge-card {
+    width: 100%;
+    height: auto;
+
+    min-width: 0;
+    min-height: 25rem;
+
+    max-height: none;
+
+    overflow: hidden;
+}
+
+/* Allow card contents to determine their height */
+.dashboard-page #fridges .fridge-card-body {
+    height: auto;
+    min-height: 25rem;
+}
+
 .dashboard-page,
 .dashboard-page *,
 .dashboard-page *::before,
@@ -944,55 +1004,81 @@ html {
   scrollbar-width: thin;
 }
 
+.dashboard-page > #fridges {
+    display: flex;
+    flex-direction: column;
+
+    min-height: 0;
+    height: 100%;
+
+    overflow: hidden;
+}
+
 .dashboard-page > #fridges .fridge-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr);
-  align-items: stretch;
-  align-content: stretch;
-  flex: 1 1 auto;
-  gap: 0.55rem;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
+    display: grid;
+
+    /* Two cards per row */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    /* Allow additional rows to be created */
+    grid-template-rows: none;
+    grid-auto-rows: max-content;
+
+    align-content: start;
+    align-items: start;
+
+    gap: 0.75rem;
+
+    /* Fill remaining panel space */
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+
+    /* Scroll through additional cards */
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+
+    padding: 0.25rem 0.4rem 0.5rem 0;
 }
 
-.dashboard-page > #fridges .fridge-grid > * {
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  align-self: stretch;
+/* Individual cards must use their natural height */
+.dashboard-page > #fridges .fridge-grid > .fridge-card {
+    width: 100%;
+    height: auto;
+
+    min-width: 0;
+    min-height: 25rem;
+
+    max-height: none;
+
+    align-self: start;
+
+    overflow: visible;
 }
 
-.dashboard-page #fridges .fridge-card {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  max-height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-
+/* Let card contents determine card height */
 .dashboard-page #fridges .fridge-card-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    "title title"
-    "identity fan"
-    "monitoring monitoring"
-    "config config"
-    "footer footer";
-  gap: 0.45rem;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  padding: 0.55rem;
-  overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    height: auto;
+
+    min-height: 25rem;
+
+    overflow: visible;
+
+    gap: 0.5rem;
+}
+
+/* Allow the monitoring section to retain its contents */
+.dashboard-page #fridges .fridge-monitoring {
+    flex: 1 0 auto;
+    min-height: 0;
+    overflow: visible;
 }
 
 .dashboard-page #fridges .fridge-title-wrapper {
@@ -1394,55 +1480,4 @@ html {
   .dashboard-page > #notifications {
     min-height: 14rem;
   }
-}
-
-/* =========================================
-   INDEPENDENT FRIDGE CARD SCROLLING
-========================================= */
-
-.dashboard-page > #fridges {
-    display: flex;
-    flex-direction: column;
-
-    min-height: 0;
-    height: 100%;
-
-    overflow: hidden;
-}
-
-.dashboard-page > #fridges .fridge-grid {
-    display: grid;
-
-    /* Two fridge cards per row */
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-
-    /* Additional cards create additional rows */
-    grid-auto-rows: max-content;
-
-    align-content: start;
-
-    gap: 0.55rem;
-
-    /* Allow the grid to occupy the remaining panel height */
-    flex: 1 1 0;
-    min-height: 0;
-
-    /* Enable independent vertical scrolling */
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    /* Prevent scrolling from propagating */
-    overscroll-behavior: contain;
-
-    padding-right: 0.4rem;
-
-    scrollbar-width: thin;
-}
-
-/* Prevent individual cards from stretching */
-.dashboard-page > #fridges .fridge-grid > .fridge-card {
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    height: auto;
 }
